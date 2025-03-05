@@ -22,7 +22,8 @@ enum CellType {
 	SAND = 1,
 	BALL = 2,
 	HOLE = 3,
-	WATER = 4
+	WATER = 4,
+	BALL_START = 5
 }
 
 const MOMENTUM_CONSERVATION = 0.85  # How much momentum is preserved when hitting sand (higher = more conservation)

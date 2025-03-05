@@ -13,7 +13,7 @@ config_version=5
 config/name="Golf Game"
 config/description="A simple 2D golf game with a pixel-simulated environment."
 config/version="0.1"
-run/main_scene="res://assets/scenes/Main.tscn"
+run/main_scene="res://assets/scenes/MainMenu.tscn"
 config/features=PackedStringArray("4.3")
 config/author="Your Name"
 config/uuid="your-unique-uuid"
@@ -22,6 +22,7 @@ config/uuid="your-unique-uuid"
 
 Constants="*res://assets/scripts/Constants.gd"
 LevelInit="*res://assets/scripts/LevelInit.gd"
+LevelManager="*res://assets/scripts/LevelManager.gd"
 
 [display]
 

@@ -5,6 +5,7 @@ var stroke_count = 0
 var game_won = false
 var current_level = ""  # Default level (procedurally generated)
 var level_json_path = ""
+var pause_menu
 
 # References to other nodes
 var sand_simulation
@@ -25,6 +26,9 @@ func _ready():
 			ui_instance.restart_game.connect(_on_restart_game)
 		else:
 			print("UI scene not found or not loaded correctly")
+			
+	pause_menu = load("res://assets/scenes/PauseMenu.tscn").instantiate()
+	add_child(pause_menu)
 	
 	# Look for level command line arguments or level selection
 	var args = OS.get_cmdline_args()
@@ -39,10 +43,12 @@ func _ready():
 	
 	# Connect signals
 	ball.ball_in_hole.connect(_on_ball_in_hole)
+	pause_menu.resume_game.connect(func(): pause_menu.hide_menu())
+	pause_menu.return_to_main_menu.connect(_on_return_to_main_menu)
 
 func initialize_level():
 	if current_level:
-		level_json_path = "res://assets/levels/" + current_level + ".json"
+		level_json_path = current_level.path
 	
 	if level_json_path != "" and FileAccess.file_exists(level_json_path):
 		# Load level from JSON
@@ -71,15 +77,14 @@ func initialize_level():
 	stroke_count = 0
 
 # FIX THIS
-func load_level(level_name):
-	current_level = level_name
-	level_json_path = "res://assets/levels/" + level_name + ".json"
-	print(level_json_path)
+func load_level(level_info):
+	current_level = level_info
+	level_json_path = level_info.path
 	initialize_level()
 	
 	# Update UI if it exists
 	if has_node("UI"):
-		$UI.update_level_name(level_name)
+		$UI.update_level_name(level_info.name)
 
 func _on_ball_in_hole():
 	game_won = true
@@ -137,6 +142,19 @@ func _input(event):
 		dialog.connect("file_selected", Callable(self, "_on_level_file_selected"))
 		add_child(dialog)
 		dialog.popup_centered(Vector2(800, 600))
+		
+	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		if pause_menu.visible:
+			pause_menu.hide_menu()
+		else:
+			pause_menu.show_menu()
+			
+func _on_return_to_main_menu():
+	# Unpause the game before changing scenes
+	get_tree().paused = false
+	
+	# Change to the main menu scene
+	get_tree().change_scene_to_file("res://assets/scenes/MainMenu.tscn")
 
 func _on_level_file_selected(path):
 	print("Selected level: ", path)

@@ -19,6 +19,7 @@ func scan_levels():
 		"name": "Procedural Level",
 		"path": "",
 		"description": "Randomly generated level",
+		"par": 5,
 		"type": "procedural"
 	})
 	

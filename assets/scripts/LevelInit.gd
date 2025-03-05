@@ -67,6 +67,7 @@ static func create_grid(hole_position):
 
 # Load a map from JSON file
 static func load_from_json(file_path):
+	print("Loading from JSON")
 	var grid = []
 	var hole_position = Vector2.ZERO
 	
@@ -79,6 +80,7 @@ static func load_from_json(file_path):
 	
 	# Load and parse JSON file
 	var file = FileAccess.open(file_path, FileAccess.READ)
+	
 	if not file:
 		print("Error: Could not open file ", file_path)
 		return {"grid": create_grid(Vector2(150, 112)), "hole_position": Vector2(150, 112)}

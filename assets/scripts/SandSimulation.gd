@@ -22,6 +22,7 @@ func _ready():
 func initialize_grid():
 	var level_data = {}
 	
+	print("Level path" + current_level_path)
 	# Check if we have a level path set
 	if current_level_path != "" and FileAccess.file_exists(current_level_path):
 		# Load level from JSON
@@ -34,11 +35,29 @@ func initialize_grid():
 		grid = LevelInit.create_grid(hole_position)
 		print("Generated procedural level")
 	
+	# Ensure the grid has the correct dimensions
+	ensure_grid_dimensions()
+	
 	# Notify listeners about the grid
 	emit_signal("grid_updated", grid)
 
+# Make sure grid has the correct dimensions
+func ensure_grid_dimensions():
+	# Ensure the grid has the correct width
+	while grid.size() < Constants.GRID_WIDTH:
+		var new_column = []
+		for y in range(Constants.GRID_HEIGHT):
+			new_column.append(Constants.CellType.EMPTY)
+		grid.append(new_column)
+	
+	# Ensure each column has the correct height
+	for x in range(grid.size()):
+		while grid[x].size() < Constants.GRID_HEIGHT:
+			grid[x].append(Constants.CellType.EMPTY)
+
 func load_level(level_path):
 	current_level_path = level_path
+	print("Level path" + current_level_path)
 	initialize_grid()
 	return hole_position  # Return hole position for ball placement
 
@@ -81,22 +100,28 @@ func update_sand_physics():
 	# Update from bottom to top, right to left
 	for y in range(Constants.GRID_HEIGHT - 2, 0, -1):
 		for x in range(Constants.GRID_WIDTH - 1, 0, -1):
-			if grid[x][y] == Constants.CellType.SAND:
-				# Check if space below is empty
-				if grid[x][y + 1] == Constants.CellType.EMPTY:
+			# First check if the current cell exists and is sand
+			if x < grid.size() and y < grid[x].size() and grid[x][y] == Constants.CellType.SAND:
+				# Check if space below is empty and within bounds
+				if y + 1 < grid[x].size() and grid[x][y + 1] == Constants.CellType.EMPTY:
 					grid[x][y] = Constants.CellType.EMPTY
 					grid[x][y + 1] = Constants.CellType.SAND
-				elif x + 1 < Constants.GRID_WIDTH and y + 1 < Constants.GRID_HEIGHT and grid[x + 1][y + 1] == Constants.CellType.EMPTY and grid[x + 1][y + 2] == Constants.CellType.EMPTY:
+				# Check if bottom right is empty and safe to move to
+				elif x + 1 < grid.size() and y + 1 < grid[x + 1].size() and y + 2 < grid[x + 1].size() and \
+					 grid[x + 1][y + 1] == Constants.CellType.EMPTY and grid[x + 1][y + 2] == Constants.CellType.EMPTY:
 					grid[x][y] = Constants.CellType.EMPTY
 					grid[x + 1][y + 1] = Constants.CellType.SAND
-				elif x - 1 >= 0 and y + 1 < Constants.GRID_HEIGHT and grid[x - 1][y + 1] == Constants.CellType.EMPTY and grid[x - 1][y + 2] == Constants.CellType.EMPTY:
+				# Check if bottom left is empty and safe to move to
+				elif x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and y + 2 < grid[x - 1].size() and \
+					 grid[x - 1][y + 1] == Constants.CellType.EMPTY and grid[x - 1][y + 2] == Constants.CellType.EMPTY:
 					grid[x][y] = Constants.CellType.EMPTY
 					grid[x - 1][y + 1] = Constants.CellType.SAND
-				# Check if diagonals are empty
-				elif x + 1 < Constants.GRID_WIDTH and y + 1 < Constants.GRID_HEIGHT and randf() > 0.8 and grid[x + 1][y + 1] == Constants.CellType.EMPTY:
+				# Random spread to bottom right
+				elif x + 1 < grid.size() and y + 1 < grid[x + 1].size() and randf() > 0.8 and grid[x + 1][y + 1] == Constants.CellType.EMPTY:
 					grid[x][y] = Constants.CellType.EMPTY
 					grid[x + 1][y + 1] = Constants.CellType.SAND
-				elif x - 1 >= 0 and y + 1 < Constants.GRID_HEIGHT and randf() > 0.8 and grid[x - 1][y + 1] == Constants.CellType.EMPTY:
+				# Random spread to bottom left
+				elif x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and randf() > 0.8 and grid[x - 1][y + 1] == Constants.CellType.EMPTY:
 					grid[x][y] = Constants.CellType.EMPTY
 					grid[x - 1][y + 1] = Constants.CellType.SAND
 					
@@ -104,22 +129,30 @@ func update_water_physics():
 	# Update from bottom to top, right to left
 	for y in range(Constants.GRID_HEIGHT - 2, 0, -1):
 		for x in range(Constants.GRID_WIDTH - 1, 0, -1):
-			if grid[x][y] == Constants.CellType.WATER:
-				# Check if space below is empty
-				if grid[x][y + 1] == Constants.CellType.EMPTY:
+			# First check if the current cell exists and is water
+			if x < grid.size() and y < grid[x].size() and grid[x][y] == Constants.CellType.WATER:
+				# Check if space below is empty and within bounds
+				if y + 1 < grid[x].size() and grid[x][y + 1] == Constants.CellType.EMPTY:
 					grid[x][y] = Constants.CellType.EMPTY
 					grid[x][y + 1] = Constants.CellType.WATER
-				# Check if diagonals are empty
-				elif x + 1 < Constants.GRID_WIDTH and y + 1 < Constants.GRID_HEIGHT and randf() > 0.1 and grid[x + 1][y + 1] == Constants.CellType.EMPTY:
+				# Check if diagonal down-right is empty and within bounds
+				elif x + 1 < grid.size() and y + 1 < grid[x + 1].size() and randf() > 0.1 and grid[x + 1][y + 1] == Constants.CellType.EMPTY:
 					grid[x][y] = Constants.CellType.EMPTY
 					grid[x + 1][y + 1] = Constants.CellType.WATER
-				elif x - 1 >= 0 and y + 1 < Constants.GRID_HEIGHT and randf() > 0.1 and grid[x - 1][y + 1] == Constants.CellType.EMPTY:
+				# Check if diagonal down-left is empty and within bounds
+				elif x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and randf() > 0.1 and grid[x - 1][y + 1] == Constants.CellType.EMPTY:
 					grid[x][y] = Constants.CellType.EMPTY
 					grid[x - 1][y + 1] = Constants.CellType.WATER
-				elif x + 1 < Constants.GRID_WIDTH and randf() > 0.4 and grid[x + 1][y] == Constants.CellType.EMPTY and grid[x - 1][y] == Constants.CellType.WATER and grid[x - 2][y] == Constants.CellType.WATER:
+				# Check horizontal water flow right if there's water behind
+				elif x + 1 < grid.size() and randf() > 0.4 and grid[x + 1][y] == Constants.CellType.EMPTY and \
+					 x - 1 >= 0 and x - 1 < grid.size() and grid[x - 1][y] == Constants.CellType.WATER and \
+					 x - 2 >= 0 and x - 2 < grid.size() and grid[x - 2][y] == Constants.CellType.WATER:
 					grid[x][y] = Constants.CellType.EMPTY
 					grid[x + 1][y] = Constants.CellType.WATER
-				elif x - 1 < Constants.GRID_WIDTH and randf() > 0.4 and grid[x - 1][y] == Constants.CellType.EMPTY and grid[x + 1][y] == Constants.CellType.WATER and grid[x + 2][y] == Constants.CellType.WATER:
+				# Check horizontal water flow left if there's water behind
+				elif x - 1 >= 0 and x - 1 < grid.size() and randf() > 0.4 and grid[x - 1][y] == Constants.CellType.EMPTY and \
+					 x + 1 < grid.size() and grid[x + 1][y] == Constants.CellType.WATER and \
+					 x + 2 < grid.size() and grid[x + 2][y] == Constants.CellType.WATER:
 					grid[x][y] = Constants.CellType.EMPTY
 					grid[x - 1][y] = Constants.CellType.WATER
 

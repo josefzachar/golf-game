@@ -26,6 +26,7 @@ func _ready():
 	
 	# Get the level manager
 	level_manager = get_node("/root/LevelManager")
+
 	if not level_manager:
 		push_error("LevelManager not found! Level selection won't work properly.")
 	
@@ -51,6 +52,7 @@ func _on_level_selected(index):
 		return
 	
 	var level_info = level_manager.get_level_info(index)
+
 	if level_info:
 		description_label.text = level_info.description
 		par_label.text = "Par: " + str(level_info.par)

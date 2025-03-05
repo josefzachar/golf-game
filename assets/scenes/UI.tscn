@@ -26,3 +26,7 @@ vertical_alignment = 1
 [node name="RestartButton" type="Button" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
 text = "Restart Game"
+
+[node name="LevelNameLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Level: Default"
