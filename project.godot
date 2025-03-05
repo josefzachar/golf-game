@@ -1,0 +1,50 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="Golf Game"
+config/description="A simple 2D golf game with a pixel-simulated environment."
+config/version="0.1"
+run/main_scene="res://assets/scenes/Main.tscn"
+config/features=PackedStringArray("4.3")
+config/author="Your Name"
+config/uuid="your-unique-uuid"
+
+[autoload]
+
+Constants="*res://assets/scripts/Constants.gd"
+LevelInit="*res://assets/scripts/LevelInit.gd"
+
+[display]
+
+window/size/viewport_width=1600
+window/size/viewport_height=1200
+
+[general]
+
+config_version=4
+
+[rendering]
+
+vulkan/enable_vulkan=false
+quality/2d_vsync=true
+
+[resource]
+
+path="assets/"
+
+[window]
+
+size/width=800
+size/height=600
+fullscreen=false
+borderless=false
+resizable=true

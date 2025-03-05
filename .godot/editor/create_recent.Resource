@@ -1,0 +1,2 @@
+GDScript
+Resource

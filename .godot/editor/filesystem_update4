@@ -1,0 +1,4 @@
+res://assets/scenes/Main.tscn
+res://assets/scripts/LevelInit.gd
+res://assets/scenes/UI.tscn
+res://assets/scenes/LevelSelect.tscn

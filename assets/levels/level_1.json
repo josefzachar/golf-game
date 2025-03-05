@@ -1,0 +1,33 @@
+{
+  "name": "Small Hills",
+  "description": "A small course with gentle hills and a water hazard",
+  "difficulty": "easy",
+  "par": 3,
+  
+  "hole_position": {
+	"x": 150,
+	"y": 112
+  },
+  
+  "starting_position": {
+	"x": 50,
+	"y": 110
+  },
+  
+  "terrain": [
+	{"x": 20, "y": 120, "type": "sand"},
+	{"x": 21, "y": 120, "type": "sand"},
+	{"x": 22, "y": 120, "type": "sand"},
+	{"x": 23, "y": 120, "type": "sand"},
+	{"x": 24, "y": 120, "type": "sand"},
+	
+	{"x": 100, "y": 115, "type": "water"},
+	{"x": 101, "y": 115, "type": "water"},
+	{"x": 102, "y": 115, "type": "water"},
+	{"x": 103, "y": 115, "type": "water"},
+	{"x": 104, "y": 115, "type": "water"},
+  ],
+  
+  "author": "YourName",
+  "creation_date": "2025-03-05"
+}
