@@ -26,8 +26,9 @@ LevelManager="*res://assets/scripts/LevelManager.gd"
 
 [display]
 
-window/size/viewport_width=1600
-window/size/viewport_height=1200
+window/size/viewport_width=3200
+window/size/viewport_height=1920
+window/stretch/scale=2.0
 
 [general]
 

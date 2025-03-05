@@ -2,7 +2,7 @@ extends Node2D
 
 # Variables
 var grid = []  # 2D grid to store cell types
-var hole_position = Vector2(150, 112)  # Default hole position in grid coordinates
+var hole_position = Vector2(150, 82)  # Default hole position in grid coordinates
 var current_level_path = ""  # Path to the current level
 
 # Signal to notify the ball of the current grid state

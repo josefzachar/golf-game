@@ -81,9 +81,11 @@ static func load_from_json(file_path):
 	# Load and parse JSON file
 	var file = FileAccess.open(file_path, FileAccess.READ)
 	
+	var default = {"grid": create_grid(Vector2(0, 10)), "hole_position": Vector2(0, 10)}
+	
 	if not file:
 		print("Error: Could not open file ", file_path)
-		return {"grid": create_grid(Vector2(150, 112)), "hole_position": Vector2(150, 112)}
+		return default
 	
 	var json_text = file.get_as_text()
 	file.close()
@@ -92,14 +94,14 @@ static func load_from_json(file_path):
 	var error = json.parse(json_text)
 	if error != OK:
 		print("JSON Parse Error: ", json.get_error_message(), " at line ", json.get_error_line())
-		return {"grid": create_grid(Vector2(150, 112)), "hole_position": Vector2(150, 112)}
+		return default
 	
 	var map_data = json.get_data()
 	
 	# Check if the expected data exists
 	if not map_data.has("terrain") or not map_data.has("hole_position"):
 		print("Error: JSON file missing required fields (terrain and/or hole_position)")
-		return {"grid": create_grid(Vector2(150, 112)), "hole_position": Vector2(150, 112)}
+		return default
 	
 	# Set hole position
 	hole_position = Vector2(map_data.hole_position.x, map_data.hole_position.y)

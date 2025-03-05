@@ -2,8 +2,8 @@ extends Node2D
 
 # Variables
 var grid = []  # Reference to the grid from SandSimulation
-var ball_position = Vector2(50, 110)  # Default ball starting position in grid coordinates
-var default_position = Vector2(50, 110)  # Store the default starting position
+var ball_position = Vector2(50, 80)  # Default ball starting position in grid coordinates
+var default_position = Vector2(50, 80)  # Store the default starting position
 var ball_velocity = Vector2.ZERO
 var is_shooting = false
 var shot_start = Vector2.ZERO

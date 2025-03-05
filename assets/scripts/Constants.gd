@@ -3,7 +3,7 @@ extends Node
 # Scene
 const GRID_SIZE = 8  # Size of each pixel cell
 const GRID_WIDTH = 200  # Width of the grid in cells
-const GRID_HEIGHT = 150  # Height of the grid in cells
+const GRID_HEIGHT = 120  # Height of the grid in cells
 const SAND_COLOR = Color(0.76, 0.70, 0.50)  # Sandy color
 const HOLE_COLOR = Color(0.1, 0.1, 0.1, 1.0)  # Dark hole with full opacity
 const WATER_COLOR = Color(0.2, 0.4, 0.8, 0.7)  # Blue-ish transparent water
