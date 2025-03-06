@@ -162,6 +162,11 @@ func test_level():
 	# Save current level to a temporary file
 	var temp_save_success = save_level_to_path(temp_level_path)
 	
+	# Add debug information
+	print("Saving temporary level with cell counts: ")
+	var material_counts = count_materials()
+	print(material_counts)
+	
 	if temp_save_success:
 		# Get the level manager singleton if it exists
 		var level_manager = get_node_or_null("/root/LevelManager")
@@ -204,6 +209,39 @@ func test_level():
 	else:
 		cell_label.text = "Error: Failed to save temp level"
 
+# Helper function to count materials for debugging
+func count_materials():
+	var counts = {
+		"sand": 0,
+		"dirt": 0,
+		"stone": 0,
+		"water": 0,
+		"hole": 0,
+		"empty": 0,
+		"other": 0
+	}
+	
+	for x in range(Constants.GRID_WIDTH):
+		for y in range(Constants.GRID_HEIGHT):
+			if x < grid.size() and y < grid[x].size():
+				match grid[x][y]:
+					Constants.CellType.SAND:
+						counts.sand += 1
+					Constants.CellType.DIRT:
+						counts.dirt += 1
+					Constants.CellType.STONE:
+						counts.stone += 1
+					Constants.CellType.WATER:
+						counts.water += 1
+					Constants.CellType.HOLE:
+						counts.hole += 1
+					Constants.CellType.EMPTY:
+						counts.empty += 1
+					_:
+						counts.other += 1
+	
+	return counts
+
 # Return to the main menu
 func return_to_main_menu():
 	get_tree().change_scene_to_file("res://assets/scenes/MainMenu.tscn")
@@ -235,6 +273,10 @@ func save_level_to_path(path):
 				match grid[x][y]:
 					Constants.CellType.SAND:
 						cell_type_str = "sand"
+					Constants.CellType.DIRT:
+						cell_type_str = "dirt"
+					Constants.CellType.STONE:
+						cell_type_str = "stone"
 					Constants.CellType.WATER:
 						cell_type_str = "water"
 					Constants.CellType.HOLE:
@@ -310,6 +352,16 @@ func setup_ui():
 	sand_button.text = "Sand"
 	sand_button.pressed.connect(func(): set_current_type(Constants.CellType.SAND))
 	hbox.add_child(sand_button)
+	
+	var dirt_button = Button.new()
+	dirt_button.text = "Dirt"
+	dirt_button.pressed.connect(func(): set_current_type(Constants.CellType.DIRT))
+	hbox.add_child(dirt_button)
+	
+	var stone_button = Button.new()
+	stone_button.text = "Stone"
+	stone_button.pressed.connect(func(): set_current_type(Constants.CellType.STONE))
+	hbox.add_child(stone_button)
 	
 	var water_button = Button.new()
 	water_button.text = "Water"
@@ -463,6 +515,10 @@ func set_current_type(type):
 	match type:
 		Constants.CellType.SAND:
 			cell_label.text = "Current: Sand"
+		Constants.CellType.DIRT:
+			cell_label.text = "Current: Dirt"
+		Constants.CellType.STONE:
+			cell_label.text = "Current: Stone"
 		Constants.CellType.WATER:
 			cell_label.text = "Current: Water"
 		Constants.CellType.EMPTY:
@@ -624,6 +680,53 @@ func _draw():
 						draw_rect(rect, Color(0.2, 0.3, 0.4), true)
 					Constants.CellType.SAND:
 						draw_rect(rect, Constants.SAND_COLOR, true)
+					Constants.CellType.DIRT:
+						# Draw dirt with organic variations
+						var dirt_base = Constants.DIRT_COLOR
+						# Apply random subtle color variations
+						var r_var = randf() * 0.08 - 0.04
+						var g_var = randf() * 0.06 - 0.03
+						dirt_base.r += r_var
+						dirt_base.g += g_var
+						draw_rect(rect, dirt_base, true)
+						
+						# Add small occasional dots for texture
+						if randf() > 0.8:
+							var dot_size = 2
+							var dot_pos = Vector2(
+								x * Constants.GRID_SIZE + randf() * (Constants.GRID_SIZE - dot_size),
+								y * Constants.GRID_SIZE + randf() * (Constants.GRID_SIZE - dot_size)
+							)
+							var dot_rect = Rect2(dot_pos, Vector2(dot_size, dot_size))
+							draw_rect(dot_rect, dirt_base.darkened(0.2), true)
+					Constants.CellType.STONE:
+						# Draw stone with a solid color and texture effect
+						var stone_base = Constants.STONE_COLOR
+						# Add random subtle shade variations for texture
+						var shade_variation = (randf() * 0.1) - 0.05
+						stone_base = stone_base.lightened(shade_variation)
+						draw_rect(rect, stone_base, true)
+						
+						# Add a darker border for definition
+						var border_rect = Rect2(
+							x * Constants.GRID_SIZE, 
+							y * Constants.GRID_SIZE, 
+							Constants.GRID_SIZE, 
+							Constants.GRID_SIZE
+						)
+						draw_rect(border_rect, Constants.STONE_COLOR.darkened(0.3), false)
+						
+						# Add inner texture lines for stone effect (only for some stones)
+						if (x + y) % 4 == 0:
+							var line_start = Vector2(
+								x * Constants.GRID_SIZE + 2, 
+								y * Constants.GRID_SIZE + 2
+							)
+							var line_end = Vector2(
+								x * Constants.GRID_SIZE + Constants.GRID_SIZE - 2, 
+								y * Constants.GRID_SIZE + Constants.GRID_SIZE - 2
+							)
+							draw_line(line_start, line_end, Constants.STONE_COLOR.darkened(0.2), 1)
 					Constants.CellType.HOLE:
 						# Draw hole with a thicker border to make it more visible
 						draw_rect(rect, Constants.HOLE_COLOR, true)
@@ -665,6 +768,12 @@ func _draw():
 			match current_cell_type:
 				Constants.CellType.SAND:
 					preview_color = Constants.SAND_COLOR
+					preview_color.a = 0.5
+				Constants.CellType.DIRT:
+					preview_color = Constants.DIRT_COLOR
+					preview_color.a = 0.5
+				Constants.CellType.STONE:
+					preview_color = Constants.STONE_COLOR
 					preview_color.a = 0.5
 				Constants.CellType.WATER:
 					preview_color = Constants.WATER_COLOR
@@ -724,6 +833,10 @@ func save_level():
 				match grid[x][y]:
 					Constants.CellType.SAND:
 						cell_type_str = "sand"
+					Constants.CellType.DIRT:
+						cell_type_str = "dirt"
+					Constants.CellType.STONE:
+						cell_type_str = "stone"
 					Constants.CellType.WATER:
 						cell_type_str = "water"
 					Constants.CellType.HOLE:
@@ -756,7 +869,7 @@ func save_level():
 func _on_save_file_selected(path):
 	if pending_save_data != "":
 		# Create directory if it doesn't exist
-		var dir = DirAccess.open("user://")
+		var dir = DirAccess.open("res://")
 		if dir:
 			var dir_path = path.get_base_dir()
 			if not dir.dir_exists(dir_path):

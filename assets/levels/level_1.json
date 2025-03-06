@@ -15,11 +15,23 @@
   },
   
   "terrain": [
-	{"x": 20, "y": 120, "type": "sand"},
-	{"x": 21, "y": 120, "type": "sand"},
-	{"x": 22, "y": 120, "type": "sand"},
-	{"x": 23, "y": 120, "type": "sand"},
-	{"x": 24, "y": 120, "type": "sand"},
+	{"x": 20, "y": 100, "type": "sand"},
+	{"x": 21, "y": 100, "type": "sand"},
+	{"x": 22, "y": 100, "type": "sand"},
+	{"x": 23, "y": 100, "type": "sand"},
+	{"x": 24, "y": 100, "type": "sand"},
+	
+	{"x": 20, "y": 80, "type": "dirt"},
+	{"x": 21, "y": 80, "type": "dirt"},
+	{"x": 22, "y": 80, "type": "dirt"},
+	{"x": 23, "y": 80, "type": "dirt"},
+	{"x": 24, "y": 80, "type": "dirt"},
+	
+	{"x": 20, "y": 60, "type": "stone"},
+	{"x": 21, "y": 60, "type": "stone"},
+	{"x": 22, "y": 60, "type": "stone"},
+	{"x": 23, "y": 60, "type": "stone"},
+	{"x": 24, "y": 60, "type": "stone"},
 	
 	{"x": 100, "y": 115, "type": "water"},
 	{"x": 101, "y": 115, "type": "water"},

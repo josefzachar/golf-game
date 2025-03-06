@@ -116,12 +116,48 @@ static func load_from_json(file_path):
 			match type:
 				"sand":
 					grid[x][y] = Constants.CellType.SAND
+				"dirt":
+					grid[x][y] = Constants.CellType.DIRT
+				"stone":
+					grid[x][y] = Constants.CellType.STONE
 				"water":
 					grid[x][y] = Constants.CellType.WATER
 				"hole":
 					grid[x][y] = Constants.CellType.HOLE
+				"ball_start":
+					grid[x][y] = Constants.CellType.BALL_START
 				_:
 					grid[x][y] = Constants.CellType.EMPTY
+	
+	# Debug output to verify loaded materials
+	var material_counts = {
+		"sand": 0,
+		"dirt": 0, 
+		"stone": 0,
+		"water": 0,
+		"hole": 0,
+		"ball_start": 0
+	}
+	
+	# Count cells of each type
+	for x in range(Constants.GRID_WIDTH):
+		for y in range(Constants.GRID_HEIGHT):
+			match grid[x][y]:
+				Constants.CellType.SAND:
+					material_counts["sand"] += 1
+				Constants.CellType.DIRT:
+					material_counts["dirt"] += 1
+				Constants.CellType.STONE:
+					material_counts["stone"] += 1
+				Constants.CellType.WATER:
+					material_counts["water"] += 1
+				Constants.CellType.HOLE:
+					material_counts["hole"] += 1
+				Constants.CellType.BALL_START:
+					material_counts["ball_start"] += 1
+	
+	# Print material counts for debugging
+	print("Loaded materials: ", material_counts)
 	
 	# Make sure the hole is properly set
 	if hole_position.x >= 0 and hole_position.x < Constants.GRID_WIDTH and hole_position.y >= 0 and hole_position.y < Constants.GRID_HEIGHT:

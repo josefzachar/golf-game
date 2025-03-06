@@ -8,3 +8,5 @@ res://assets/scenes/PauseMenu.tscn
 res://assets/scripts/Constants.gd
 res://assets/scripts/Ball.gd
 res://assets/scripts/SandSimulation.gd
+res://assets/scripts/LevelEditor.gd
+res://assets/levels/level_1.json

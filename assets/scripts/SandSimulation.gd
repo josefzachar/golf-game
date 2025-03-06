@@ -59,6 +59,32 @@ func load_level(level_path):
 	current_level_path = level_path
 	print("Level path" + current_level_path)
 	initialize_grid()
+	
+	var counts = {
+		"sand": 0, "dirt": 0, "stone": 0, "water": 0, "hole": 0, "empty": 0, "other": 0
+	}
+	
+	for x in range(Constants.GRID_WIDTH):
+		for y in range(Constants.GRID_HEIGHT):
+			if x < grid.size() and y < grid[x].size():
+				match grid[x][y]:
+					Constants.CellType.SAND:
+						counts["sand"] += 1
+					Constants.CellType.DIRT:
+						counts["dirt"] += 1
+					Constants.CellType.STONE:
+						counts["stone"] += 1
+					Constants.CellType.WATER:
+						counts["water"] += 1
+					Constants.CellType.HOLE:
+						counts["hole"] += 1
+					Constants.CellType.EMPTY:
+						counts["empty"] += 1
+					_:
+						counts["other"] += 1
+	
+	print("Material counts after loading: ", counts)
+	
 	return hole_position  # Return hole position for ball placement
 
 func _on_sand_update():
@@ -69,6 +95,7 @@ func _on_sand_update():
 		
 	update_sand_physics()
 	update_water_physics()
+	update_dirt_physics()
 	emit_signal("grid_updated", grid)
 	queue_redraw()  # Trigger redraw (Godot 4.x)
 
@@ -125,6 +152,85 @@ func update_sand_physics():
 					grid[x][y] = Constants.CellType.EMPTY
 					grid[x - 1][y + 1] = Constants.CellType.SAND
 					
+func update_dirt_physics():
+	# Update from bottom to top, right to left for consistent physics
+	for y in range(Constants.GRID_HEIGHT - 2, 0, -1):
+		for x in range(Constants.GRID_WIDTH - 1, 0, -1):
+			# Check if the current cell exists and is dirt
+			if x < grid.size() and y < grid[x].size() and grid[x][y] == Constants.CellType.DIRT:
+				# Dirt moves less often than sand - random check to simulate rigidity
+				if randf() > 0.7:  # 30% chance to evaluate movement (more rigid than sand)
+					continue
+				
+				# Check if we're on top of stone - dirt doesn't move when on stone
+				if y + 1 < grid[x].size() and grid[x][y + 1] == Constants.CellType.STONE:
+					continue
+					
+				# Check if space below is empty and within bounds - basic gravity
+				if y + 1 < grid[x].size() and grid[x][y + 1] == Constants.CellType.EMPTY:
+					grid[x][y] = Constants.CellType.EMPTY
+					grid[x][y + 1] = Constants.CellType.DIRT
+					continue
+				
+				# Check if space below is water - dirt sinks in water
+				if y + 1 < grid[x].size() and grid[x][y + 1] == Constants.CellType.WATER:
+					grid[x][y] = Constants.CellType.WATER  # Replace dirt with water
+					grid[x][y + 1] = Constants.CellType.DIRT  # Dirt sinks
+					continue
+					
+				# Dirt has limited diagonal movement - only when on unstable surface
+				# First check if we're on sand or another dirt (can slide off)
+				var on_unstable = false
+				if y + 1 < grid[x].size():
+					var below_cell = grid[x][y + 1]
+					if below_cell == Constants.CellType.SAND or below_cell == Constants.CellType.DIRT or below_cell == Constants.CellType.WATER:
+						on_unstable = true
+				
+				# Limited lateral movement - only when on unstable surface
+				if on_unstable:
+					# Bottom-right check
+					if x + 1 < grid.size() and y + 1 < grid[x + 1].size() and randf() > 0.6 and grid[x + 1][y + 1] == Constants.CellType.EMPTY:
+						# Move if there's empty space diagonally
+						grid[x][y] = Constants.CellType.EMPTY
+						grid[x + 1][y + 1] = Constants.CellType.DIRT
+						continue
+						
+					# Bottom-left check
+					elif x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and randf() > 0.6 and grid[x - 1][y + 1] == Constants.CellType.EMPTY:
+						# Move if there's empty space diagonally
+						grid[x][y] = Constants.CellType.EMPTY
+						grid[x - 1][y + 1] = Constants.CellType.DIRT
+						continue
+				
+				# Very limited horizontal spread - dirt barely moves sideways without support
+				# Only if there's a column of at least 3 dirt blocks
+				var dirt_column_height = 0
+				for check_y in range(y, min(y + 3, Constants.GRID_HEIGHT)):
+					if check_y < grid[x].size() and grid[x][check_y] == Constants.CellType.DIRT:
+						dirt_column_height += 1
+					else:
+						break
+				
+				# Horizontal movement if dirt column is high enough (pressure based)
+				if dirt_column_height >= 3:
+					var horizontal_move_chance = 0.15  # Very low probability
+					
+					# Check right
+					if x + 1 < grid.size() and grid[x + 1][y] == Constants.CellType.EMPTY and randf() < horizontal_move_chance:
+						# Only move if there's support below or sand/dirt beside
+						if y + 1 < grid[x + 1].size() and grid[x + 1][y + 1] != Constants.CellType.EMPTY:
+							grid[x][y] = Constants.CellType.EMPTY
+							grid[x + 1][y] = Constants.CellType.DIRT
+							continue
+					
+					# Check left
+					if x - 1 >= 0 and x - 1 < grid.size() and grid[x - 1][y] == Constants.CellType.EMPTY and randf() < horizontal_move_chance:
+						# Only move if there's support below or sand/dirt beside
+						if y + 1 < grid[x - 1].size() and grid[x - 1][y + 1] != Constants.CellType.EMPTY:
+							grid[x][y] = Constants.CellType.EMPTY
+							grid[x - 1][y] = Constants.CellType.DIRT
+							continue
+							
 func update_water_physics():
 	# Update from bottom to top, right to left
 	for y in range(Constants.GRID_HEIGHT - 2, 0, -1):
@@ -191,4 +297,52 @@ func _draw():
 						var water_color = Constants.WATER_COLOR
 						water_color.b += water_variation
 						draw_rect(rect, water_color, true)
+					Constants.CellType.STONE:
+						# Draw stone with a solid color and texture effect
+						var stone_base = Constants.STONE_COLOR
+						# Add random subtle shade variations for texture
+						var shade_variation = (randf() * 0.1) - 0.05
+						stone_base = stone_base.lightened(shade_variation)
+						draw_rect(rect, stone_base, true)
+						
+						# Add a darker border for definition
+						var border_rect = Rect2(
+							x * Constants.GRID_SIZE, 
+							y * Constants.GRID_SIZE, 
+							Constants.GRID_SIZE, 
+							Constants.GRID_SIZE
+						)
+						draw_rect(border_rect, Constants.STONE_COLOR.darkened(0.3), false)
+						
+						# Add inner texture lines for stone effect (only for some stones)
+						if (x + y) % 4 == 0:
+							var line_start = Vector2(
+								x * Constants.GRID_SIZE + 2, 
+								y * Constants.GRID_SIZE + 2
+							)
+							var line_end = Vector2(
+								x * Constants.GRID_SIZE + Constants.GRID_SIZE - 2, 
+								y * Constants.GRID_SIZE + Constants.GRID_SIZE - 2
+							)
+							draw_line(line_start, line_end, Constants.STONE_COLOR.darkened(0.2), 1)
+							
+					Constants.CellType.DIRT:
+						# Draw dirt with organic variations
+						var dirt_base = Constants.DIRT_COLOR
+						# Apply random subtle color variations
+						var r_var = randf() * 0.08 - 0.04
+						var g_var = randf() * 0.06 - 0.03
+						dirt_base.r += r_var
+						dirt_base.g += g_var
+						draw_rect(rect, dirt_base, true)
+						
+						# Add small occasional dots for texture
+						if randf() > 0.8:
+							var dot_size = 2
+							var dot_pos = Vector2(
+								x * Constants.GRID_SIZE + randf() * (Constants.GRID_SIZE - dot_size),
+								y * Constants.GRID_SIZE + randf() * (Constants.GRID_SIZE - dot_size)
+							)
+							var dot_rect = Rect2(dot_pos, Vector2(dot_size, dot_size))
+							draw_rect(dot_rect, dirt_base.darkened(0.2), true)
 					# Ball is drawn by the Ball node

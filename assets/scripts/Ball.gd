@@ -89,20 +89,29 @@ func update_ball_physics():
 	
 	if check_pos_below.y < Constants.GRID_HEIGHT:
 		var cell_below = sand_simulation.get_cell(check_pos_below.x, check_pos_below.y)
-		if cell_below == Constants.CellType.SAND:
+		if cell_below == Constants.CellType.SAND or cell_below == Constants.CellType.DIRT or cell_below == Constants.CellType.STONE:
 			on_surface = true
 			
 			# If ball is moving very slowly and on a surface, let it rest
 			if ball_velocity.length() < Constants.REST_THRESHOLD:
 				ball_velocity = Vector2.ZERO
 				
-				# When at rest, ensure the ball sits on top of the sand, not inside it
+				# When at rest, ensure the ball sits on top of the surface, not inside it
 				var rest_y = check_pos_below.y - 1
 				if rest_y >= 0 and rest_y < Constants.GRID_HEIGHT:
 					ball_position.y = rest_y
 			else:
-				# Apply mild friction when in contact with sand but still moving
-				ball_velocity.x *= 0.95  # Reduced horizontal friction
+				# Apply friction based on material type
+				match cell_below:
+					Constants.CellType.SAND:
+						# Sand has more friction
+						ball_velocity.x *= 0.95  # Reduced horizontal friction
+					Constants.CellType.DIRT:
+						# Dirt has less friction than sand
+						ball_velocity.x *= 0.97
+					Constants.CellType.STONE:
+						# Stone has very little friction
+						ball_velocity.x *= 0.99
 	
 	# Only apply gravity if not resting
 	if !on_surface or ball_velocity.length() >= Constants.REST_THRESHOLD:
