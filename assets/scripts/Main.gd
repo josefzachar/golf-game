@@ -12,6 +12,9 @@ var ui
 var sand_simulation
 var ball
 
+# Ball type tracking
+var current_ball_type = Constants.BallType.STANDARD
+
 func _ready():
 	# Get references to nodes
 	sand_simulation = $SandSimulation
@@ -29,6 +32,10 @@ func _ready():
 			ui.restart_game.connect(_on_restart_game)
 			ui.edit_level.connect(_on_edit_level)
 			ui.return_to_menu.connect(_on_return_to_main_menu)
+			
+			# Connect ball type switch signal
+			if ui.has_signal("switch_ball_type"):
+				ui.switch_ball_type.connect(_on_switch_ball_type)
 		else:
 			print("UI scene not found or not loaded correctly")
 	else:
@@ -40,6 +47,10 @@ func _ready():
 			ui.edit_level.connect(_on_edit_level)
 		if not ui.return_to_menu.is_connected(_on_return_to_main_menu):
 			ui.return_to_menu.connect(_on_return_to_main_menu)
+		
+		# Connect ball type switch signal if available
+		if ui.has_signal("switch_ball_type") and not ui.switch_ball_type.is_connected(_on_switch_ball_type):
+			ui.switch_ball_type.connect(_on_switch_ball_type)
 			
 	pause_menu = load("res://assets/scenes/PauseMenu.tscn").instantiate()
 	add_child(pause_menu)
@@ -72,6 +83,11 @@ func _ready():
 	
 	# Connect signals
 	ball.ball_in_hole.connect(_on_ball_in_hole)
+	
+	# Connect ball type changed signal if available
+	if ball.has_signal("ball_type_changed") and not ball.ball_type_changed.is_connected(_on_ball_type_changed):
+		ball.ball_type_changed.connect(_on_ball_type_changed)
+	
 	pause_menu.resume_game.connect(func(): pause_menu.hide_menu())
 	pause_menu.return_to_main_menu.connect(_on_return_to_main_menu)
 
@@ -105,6 +121,15 @@ func initialize_level():
 	# Reset game state
 	game_won = false
 	stroke_count = 0
+	
+	# Reset to standard ball type
+	if ball.has_method("switch_ball_type"):
+		ball.switch_ball_type(Constants.BallType.STANDARD)
+		current_ball_type = Constants.BallType.STANDARD
+		
+		# Update UI ball selection if available
+		if ui and ui.has_method("update_ball_selection_ui"):
+			ui.update_ball_selection_ui(Constants.BallType.STANDARD)
 
 func load_level(level_info):
 	current_level = level_info
@@ -166,6 +191,30 @@ func _on_return_to_main_menu():
 	# Change to the main menu scene
 	get_tree().change_scene_to_file("res://assets/scenes/MainMenu.tscn")
 
+# Ball type switching functions
+func _on_switch_ball_type(type):
+	# Handle ball type switching
+	if ball and ball.has_method("switch_ball_type"):
+		ball.switch_ball_type(type)
+		current_ball_type = type
+
+func _on_ball_type_changed(type):
+	# Update UI to reflect the current ball type
+	if ui and ui.has_method("update_ball_selection_ui"):
+		ui.update_ball_selection_ui(type)
+		
+	# Create effect when switching to special ball types
+	if type == Constants.BallType.EXPLOSIVE:
+		# Visual/audio feedback for explosive ball
+		print("Explosive ball activated!")
+	elif type == Constants.BallType.TELEPORT:
+		# Visual/audio feedback for teleport ball
+		print("Teleport ball activated!")
+	elif type == Constants.BallType.STICKY:
+		print("Sticky ball activated!")
+	elif type == Constants.BallType.HEAVY:
+		print("Heavy ball activated!")
+
 func _input(event):
 	if game_won and event is InputEventKey and event.pressed and event.keycode == KEY_R:
 		# Restart game
@@ -179,6 +228,19 @@ func _input(event):
 			# Release shot
 			ball.end_shooting()
 			stroke_count += 1
+	
+	# Ball type switching with number keys (1-5)
+	if not game_won and event is InputEventKey and event.pressed:
+		if event.keycode == KEY_1:
+			_on_switch_ball_type(Constants.BallType.STANDARD)
+		elif event.keycode == KEY_2:
+			_on_switch_ball_type(Constants.BallType.STICKY)
+		elif event.keycode == KEY_3:
+			_on_switch_ball_type(Constants.BallType.EXPLOSIVE)
+		elif event.keycode == KEY_4:
+			_on_switch_ball_type(Constants.BallType.TELEPORT)
+		elif event.keycode == KEY_5:
+			_on_switch_ball_type(Constants.BallType.HEAVY)
 	
 	# Debug key to load a specific level when L is pressed
 	if event is InputEventKey and event.pressed and event.keycode == KEY_L:

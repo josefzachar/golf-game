@@ -89,3 +89,55 @@ const MOMENTUM_CONSERVATION = 0.85  # How much momentum is preserved when hittin
 const SAND_RESISTANCE = 5  # How much sand slows the ball (reduced to allow more movement)
 const SAND_DISPLACEMENT_FACTOR = 0.2  # How much sand spreads (higher = more spread)
 const WATER_RESISTANCE = 20.0  # How much water slows the ball (much higher than sand)
+
+# Add these to Constants.gd after the existing constants
+
+# Ball types
+enum BallType {
+	STANDARD = 0,
+	STICKY = 1,
+	EXPLOSIVE = 2,
+	TELEPORT = 3,
+	HEAVY = 4
+}
+
+# Ball properties for each type
+const BALL_PROPERTIES = {
+	BallType.STANDARD: {
+		"name": "Standard Ball",
+		"color": Color(1.0, 1.0, 1.0),  # White
+		"mass": BALL_MASS,  # Use existing BALL_MASS
+		"bounce_factor": BOUNCE_FACTOR,  # Use existing BOUNCE_FACTOR
+		"description": "Regular golf ball with standard physics"
+	},
+	BallType.STICKY: {
+		"name": "Sticky Ball",
+		"color": Color(0.2, 0.8, 0.2),  # Green
+		"mass": 0.6,
+		"bounce_factor": 0.0,  # No bounce
+		"description": "Sticks to surfaces and floats on water"
+	},
+	BallType.EXPLOSIVE: {
+		"name": "Explosive Ball",
+		"color": Color(1.0, 0.3, 0.1),  # Orange-red
+		"mass": 0.7,
+		"bounce_factor": 0.4,
+		"explosion_radius": 8.0,
+		"description": "Explodes when activated"
+	},
+	BallType.TELEPORT: {
+		"name": "Teleport Ball",
+		"color": Color(0.6, 0.2, 0.8),  # Purple
+		"mass": 0.5,
+		"bounce_factor": 0.5,
+		"description": "Swaps places with the hole when activated"
+	},
+	BallType.HEAVY: {
+		"name": "Heavy Ball",
+		"color": Color(0.3, 0.3, 0.7),  # Blue
+		"mass": 2.0,  # Much heavier
+		"bounce_factor": 0.3,  # More bounce due to weight
+		"penetration_factor": 3.0,  # Penetrates materials easier
+		"description": "Heavy projectile that penetrates terrain"
+	}
+}
