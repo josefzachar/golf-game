@@ -194,461 +194,285 @@ func _on_sand_update():
 	queue_redraw()  # Trigger redraw (Godot 4.x)
 
 func create_sand_crater(position, radius):
-	# Convert sand to empty space in a small radius
+	# Track affected cells to avoid redundant processing
+	var processed_cells = {}
+	
+	# Single loop implementation to avoid the repeated code in the original
 	for x in range(int(position.x - radius), int(position.x + radius + 1)):
 		for y in range(int(position.y - radius), int(position.y + radius + 1)):
-			if x >= 0 and x < Constants.GRID_WIDTH and y >= 0 and y < Constants.GRID_HEIGHT and x < grid.size() and y < grid[x].size():
-				if Vector2(x, y).distance_to(position) <= radius:
-					# NEVER affect stone - stone is completely indestructible 
-					if grid[x][y].type == Constants.CellType.STONE:
-						continue  # Skip stone cells entirely
+			# Skip out-of-bound cells or already processed cells
+			if x < 0 or x >= Constants.GRID_WIDTH or y < 0 or y >= Constants.GRID_HEIGHT or x >= grid.size() or y >= grid[x].size():
+				continue
+				
+			var cell_key = str(x) + "," + str(y)
+			if processed_cells.has(cell_key):
+				continue
+				
+			# Check if cell is within the impact radius
+			var distance = Vector2(x, y).distance_to(position)
+			if distance > radius:
+				continue
+				
+			# Mark as processed
+			processed_cells[cell_key] = true
+			
+			# Calculate impact properties
+			var cell_type = grid[x][y].type
+			var impact_force = radius * (1.0 - distance / radius)
+			var impact_dir = Vector2(x, y) - position
+			if impact_dir.length() > 0:
+				impact_dir = impact_dir.normalized()
+			else:
+				impact_dir = Vector2(0, -1)  # Default upward if at exact center
+			
+			# Handle different materials
+			match cell_type:
+				Constants.CellType.STONE:
+					# Stone is completely indestructible
+					continue
 					
-					# EXTREMELY LIMITED DIRT INTERACTION - dirt is now almost as solid as stone
-					if grid[x][y].type == Constants.CellType.DIRT:
-						# Only affect dirt with EXTREMELY high impacts and very small radius
-						if radius > 6.0 and Vector2(x, y).distance_to(position) <= radius * 0.15:
-							# Even higher chance to resist impact completely
-							if randf() > 0.9:  # 90% chance to resist impact completely (was 0.7)
-								var dirt_properties = grid[x][y]
-								grid[x][y] = create_empty_cell()
-								
-								# Almost no dirt particle creation
-								if randf() > 0.98:  # Only 2% chance (was 10%)
-									var dir_x = randf_range(-0.2, 0.2)  # Extremely limited spread
-									var dir_y = randf_range(-0.6, -0.1)  # Minimal motion
-									
-									var blast_dir = Vector2(dir_x, dir_y)
-									
-									var new_x = int(x + blast_dir.x)
-									var new_y = int(y + blast_dir.y)
-									if new_x >= 0 and new_x < Constants.GRID_WIDTH and new_y >= 0 and new_y < Constants.GRID_HEIGHT and new_x < grid.size() and new_y < grid[new_x].size():
-										if grid[new_x][new_y].type == Constants.CellType.EMPTY:
-											grid[new_x][new_y] = dirt_properties
-											grid[new_x][new_y].velocity = blast_dir * dirt_properties.mass * 0.05  # Minimal velocity
-						continue  # Always skip the normal processing for dirt
-					
-					# Handle sand cells with normal physics
-					if grid[x][y].type == Constants.CellType.SAND:
-						# Store the properties of the sand before clearing
-						var sand_properties = grid[x][y]
-						grid[x][y] = create_empty_cell()
+				Constants.CellType.DIRT:
+					# DIRT - Tunneling material that only responds to impacts
+					# Only move dirt with significant force
+					if impact_force > 2.0 and randf() > max(0.3, 0.7 - impact_force * 0.1):
+						var dirt_properties = grid[x][y].duplicate()
 						
-						# Create flying sand particles - more flying sand for more dramatic effect
-						if randf() > 0.3:  # Increased probability of flying sand (was 0.7)
-							# Calculate direction vector based on impact position
-							var dir_x = randf_range(-1.5, 1.5)  # Wider spread
-							var dir_y = randf_range(-3.0, -0.5)  # More upward motion
+						# Apply velocity based on impact
+						dirt_properties.velocity = impact_dir * impact_force * 0.75
+						
+						# Only remove dirt with higher force
+						if impact_force > 3.0:
+							grid[x][y] = create_empty_cell()
 							
-							# Add a bias in the direction of ball movement
-							var blast_dir = Vector2(dir_x, dir_y)
+							# Calculate new position based on impact direction
+							var strength_factor = min(3.0, impact_force * 0.5)
+							var new_x = int(x + impact_dir.x * strength_factor)
+							var new_y = int(y + impact_dir.y * strength_factor)
 							
-							var new_x = int(x + blast_dir.x)
-							var new_y = int(y + blast_dir.y)
+							# Try to place the dirt in the impact direction
 							if new_x >= 0 and new_x < Constants.GRID_WIDTH and new_y >= 0 and new_y < Constants.GRID_HEIGHT and new_x < grid.size() and new_y < grid[new_x].size():
 								if grid[new_x][new_y].type == Constants.CellType.EMPTY:
-									# Transfer the properties from the original sand
-									grid[new_x][new_y] = sand_properties
-									# Add velocity based on the blast direction
-									grid[new_x][new_y].velocity = blast_dir * sand_properties.mass * 0.5
-	# Convert sand to empty space in a small radius
-	for x in range(int(position.x - radius), int(position.x + radius + 1)):
-		for y in range(int(position.y - radius), int(position.y + radius + 1)):
-			if x >= 0 and x < Constants.GRID_WIDTH and y >= 0 and y < Constants.GRID_HEIGHT and x < grid.size() and y < grid[x].size():
-				if Vector2(x, y).distance_to(position) <= radius:
-					# NEVER affect stone - stone is completely indestructible 
-					if grid[x][y].type == Constants.CellType.STONE:
-						continue  # Skip stone cells entirely
-					
-					# EXTREMELY LIMITED DIRT INTERACTION - dirt is now almost as solid as stone
-					if grid[x][y].type == Constants.CellType.DIRT:
-						# Only affect dirt with EXTREME impacts and very small radius
-						if radius > 3.0 and Vector2(x, y).distance_to(position) <= radius * 0.3:
-							# Even then, only a small chance to actually affect the dirt
-							if randf() > 0.7:  # 70% chance to resist impact completely
-								var dirt_properties = grid[x][y]
-								grid[x][y] = create_empty_cell()
-								
-								# Very limited dirt particle creation
-								if randf() > 0.9:  # Only 10% chance (was 40%)
-									var dir_x = randf_range(-0.5, 0.5)  # Very limited spread
-									var dir_y = randf_range(-1.0, -0.2)  # Less upward motion
-									
-									var blast_dir = Vector2(dir_x, dir_y)
-									
-									var new_x = int(x + blast_dir.x)
-									var new_y = int(y + blast_dir.y)
-									if new_x >= 0 and new_x < Constants.GRID_WIDTH and new_y >= 0 and new_y < Constants.GRID_HEIGHT and new_x < grid.size() and new_y < grid[new_x].size():
-										if grid[new_x][new_y].type == Constants.CellType.EMPTY:
-											grid[new_x][new_y] = dirt_properties
-											grid[new_x][new_y].velocity = blast_dir * dirt_properties.mass * 0.15
-						continue  # Always skip the normal processing for dirt
-					
-					# Handle sand cells with normal physics
-					if grid[x][y].type == Constants.CellType.SAND:
-						# Store the properties of the sand before clearing
-						var sand_properties = grid[x][y]
-						grid[x][y] = create_empty_cell()
-						
-						# Create flying sand particles - more flying sand for more dramatic effect
-						if randf() > 0.3:  # Increased probability of flying sand (was 0.7)
-							# Calculate direction vector based on impact position
-							var dir_x = randf_range(-1.5, 1.5)  # Wider spread
-							var dir_y = randf_range(-3.0, -0.5)  # More upward motion
-							
-							# Add a bias in the direction of ball movement
-							var blast_dir = Vector2(dir_x, dir_y)
-							
-							var new_x = int(x + blast_dir.x)
-							var new_y = int(y + blast_dir.y)
-							if new_x >= 0 and new_x < Constants.GRID_WIDTH and new_y >= 0 and new_y < Constants.GRID_HEIGHT and new_x < grid.size() and new_y < grid[new_x].size():
-								if grid[new_x][new_y].type == Constants.CellType.EMPTY:
-									# Transfer the properties from the original sand
-									grid[new_x][new_y] = sand_properties
-									# Add velocity based on the blast direction
-									grid[new_x][new_y].velocity = blast_dir * sand_properties.mass * 0.5
-	# Convert sand to empty space in a small radius
-	for x in range(int(position.x - radius), int(position.x + radius + 1)):
-		for y in range(int(position.y - radius), int(position.y + radius + 1)):
-			if x >= 0 and x < Constants.GRID_WIDTH and y >= 0 and y < Constants.GRID_HEIGHT and x < grid.size() and y < grid[x].size():
-				if Vector2(x, y).distance_to(position) <= radius:
-					# NEVER affect stone - stone is completely indestructible 
-					if grid[x][y].type == Constants.CellType.STONE:
-						continue  # Skip stone cells entirely
-					
-					# EXTREMELY LIMITED DIRT INTERACTION - dirt is now almost as solid as stone
-					if grid[x][y].type == Constants.CellType.DIRT:
-						# Only affect dirt with EXTREME impacts and very small radius
-						if radius > 3.0 and Vector2(x, y).distance_to(position) <= radius * 0.3:
-							# Even then, only a small chance to actually affect the dirt
-							if randf() > 0.7:  # 70% chance to resist impact completely
-								var dirt_properties = grid[x][y]
-								grid[x][y] = create_empty_cell()
-								
-								# Very limited dirt particle creation
-								if randf() > 0.9:  # Only 10% chance (was 40%)
-									var dir_x = randf_range(-0.5, 0.5)  # Very limited spread
-									var dir_y = randf_range(-1.0, -0.2)  # Less upward motion
-									
-									var blast_dir = Vector2(dir_x, dir_y)
-									
-									var new_x = int(x + blast_dir.x)
-									var new_y = int(y + blast_dir.y)
-									if new_x >= 0 and new_x < Constants.GRID_WIDTH and new_y >= 0 and new_y < Constants.GRID_HEIGHT and new_x < grid.size() and new_y < grid[new_x].size():
-										if grid[new_x][new_y].type == Constants.CellType.EMPTY:
-											grid[new_x][new_y] = dirt_properties
-											grid[new_x][new_y].velocity = blast_dir * dirt_properties.mass * 0.15
-						continue  # Always skip the normal processing for dirt
-					
-					# Handle sand cells with normal physics
-					if grid[x][y].type == Constants.CellType.SAND:
-						# Store the properties of the sand before clearing
-						var sand_properties = grid[x][y]
-						grid[x][y] = create_empty_cell()
-						
-						# Create flying sand particles - more flying sand for more dramatic effect
-						if randf() > 0.3:  # Increased probability of flying sand (was 0.7)
-							# Calculate direction vector based on impact position
-							var dir_x = randf_range(-1.5, 1.5)  # Wider spread
-							var dir_y = randf_range(-3.0, -0.5)  # More upward motion
-							
-							# Add a bias in the direction of ball movement
-							var blast_dir = Vector2(dir_x, dir_y)
-							
-							var new_x = int(x + blast_dir.x)
-							var new_y = int(y + blast_dir.y)
-							if new_x >= 0 and new_x < Constants.GRID_WIDTH and new_y >= 0 and new_y < Constants.GRID_HEIGHT and new_x < grid.size() and new_y < grid[new_x].size():
-								if grid[new_x][new_y].type == Constants.CellType.EMPTY:
-									# Transfer the properties from the original sand
-									grid[new_x][new_y] = sand_properties
-									# Add velocity based on the blast direction
-									grid[new_x][new_y].velocity = blast_dir * sand_properties.mass * 0.5
-	# Convert sand to empty space in a small radius
-	for x in range(int(position.x - radius), int(position.x + radius + 1)):
-		for y in range(int(position.y - radius), int(position.y + radius + 1)):
-			if x >= 0 and x < Constants.GRID_WIDTH and y >= 0 and y < Constants.GRID_HEIGHT and x < grid.size() and y < grid[x].size():
-				if Vector2(x, y).distance_to(position) <= radius:
-					# NEVER affect stone - stone is completely indestructible 
-					if grid[x][y].type == Constants.CellType.STONE:
-						continue  # Skip stone cells entirely
-					
-					# Handle sand cells
-					if grid[x][y].type == Constants.CellType.SAND:
-						# Store the properties of the sand before clearing
-						var sand_properties = grid[x][y]
-						grid[x][y] = create_empty_cell()
-						
-						# Create flying sand particles - more flying sand for more dramatic effect
-						if randf() > 0.3:  # Increased probability of flying sand (was 0.7)
-							# Calculate direction vector based on impact position
-							var dir_x = randf_range(-1.5, 1.5)  # Wider spread
-							var dir_y = randf_range(-3.0, -0.5)  # More upward motion
-							
-							# Add a bias in the direction of ball movement
-							var blast_dir = Vector2(dir_x, dir_y)
-							
-							var new_x = int(x + blast_dir.x)
-							var new_y = int(y + blast_dir.y)
-							if new_x >= 0 and new_x < Constants.GRID_WIDTH and new_y >= 0 and new_y < Constants.GRID_HEIGHT and new_x < grid.size() and new_y < grid[new_x].size():
-								if grid[new_x][new_y].type == Constants.CellType.EMPTY:
-									# Transfer the properties from the original sand
-									grid[new_x][new_y] = sand_properties
-									# Add velocity based on the blast direction
-									grid[new_x][new_y].velocity = blast_dir * sand_properties.mass * 0.5
-					
-					# Handle dirt cells - similar to sand but less particle creation and much smaller radius
-					elif grid[x][y].type == Constants.CellType.DIRT:
-						# Much more limited radius for dirt - only very close cells are affected
-						if Vector2(x, y).distance_to(position) <= radius * 0.4:  # Reduced from 0.6
-							# Very small chance of actually displacing dirt based on impact force
-							if radius > 1.5 and randf() > 0.7:  # Only large impacts, with low probability
-								# Store dirt properties
-								var dirt_properties = grid[x][y]
-								grid[x][y] = create_empty_cell()
-								
-								# Create fewer flying dirt particles
-								if randf() > 0.8:  # Even lower probability than before (was 0.6)
-									var dir_x = randf_range(-0.7, 0.7)  # Very limited spread (was -1.0, 1.0)
-									var dir_y = randf_range(-1.5, -0.3)  # Less upward motion (was -2.0, -0.5)
-									
-									var blast_dir = Vector2(dir_x, dir_y)
-									
-									var new_x = int(x + blast_dir.x)
-									var new_y = int(y + blast_dir.y)
-									if new_x >= 0 and new_x < Constants.GRID_WIDTH and new_y >= 0 and new_y < Constants.GRID_HEIGHT and new_x < grid.size() and new_y < grid[new_x].size():
-										if grid[new_x][new_y].type == Constants.CellType.EMPTY:
-											# Transfer dirt properties
-											grid[new_x][new_y] = dirt_properties
-											# Even less velocity for dirt particles
-											grid[new_x][new_y].velocity = blast_dir * dirt_properties.mass * 0.2
-	# Convert sand to empty space in a small radius
-	for x in range(int(position.x - radius), int(position.x + radius + 1)):
-		for y in range(int(position.y - radius), int(position.y + radius + 1)):
-			if x >= 0 and x < Constants.GRID_WIDTH and y >= 0 and y < Constants.GRID_HEIGHT and x < grid.size() and y < grid[x].size():
-				if Vector2(x, y).distance_to(position) <= radius:
-					# Handle sand cells
-					if grid[x][y].type == Constants.CellType.SAND:
-						# Store the properties of the sand before clearing
-						var sand_properties = grid[x][y]
-						grid[x][y] = create_empty_cell()
-						
-						# Create flying sand particles - more flying sand for more dramatic effect
-						if randf() > 0.3:  # Increased probability of flying sand (was 0.7)
-							# Calculate direction vector based on impact position
-							var dir_x = randf_range(-1.5, 1.5)  # Wider spread
-							var dir_y = randf_range(-3.0, -0.5)  # More upward motion
-							
-							# Add a bias in the direction of ball movement
-							var blast_dir = Vector2(dir_x, dir_y)
-							
-							var new_x = int(x + blast_dir.x)
-							var new_y = int(y + blast_dir.y)
-							if new_x >= 0 and new_x < Constants.GRID_WIDTH and new_y >= 0 and new_y < Constants.GRID_HEIGHT and new_x < grid.size() and new_y < grid[new_x].size():
-								if grid[new_x][new_y].type == Constants.CellType.EMPTY:
-									# Transfer the properties from the original sand
-									grid[new_x][new_y] = sand_properties
-									# Add velocity based on the blast direction
-									grid[new_x][new_y].velocity = blast_dir * sand_properties.mass * 0.5
-					# Handle dirt cells - similar to sand but less particle creation and smaller radius
-					elif grid[x][y].type == Constants.CellType.DIRT and Vector2(x, y).distance_to(position) <= radius * 0.6:
-						# Store dirt properties
-						var dirt_properties = grid[x][y]
-						grid[x][y] = create_empty_cell()
-						
-						# Create fewer flying dirt particles
-						if randf() > 0.6:  # Lower probability than sand
-							var dir_x = randf_range(-1.0, 1.0)  # Less spread
-							var dir_y = randf_range(-2.0, -0.5)  # Less upward motion
-							
-							var blast_dir = Vector2(dir_x, dir_y)
-							
-							var new_x = int(x + blast_dir.x)
-							var new_y = int(y + blast_dir.y)
-							if new_x >= 0 and new_x < Constants.GRID_WIDTH and new_y >= 0 and new_y < Constants.GRID_HEIGHT and new_x < grid.size() and new_y < grid[new_x].size():
-								if grid[new_x][new_y].type == Constants.CellType.EMPTY:
-									# Transfer dirt properties
 									grid[new_x][new_y] = dirt_properties
-									# Less velocity for dirt particles
-									grid[new_x][new_y].velocity = blast_dir * dirt_properties.mass * 0.3
-	# Convert sand to empty space in a small radius
-	for x in range(int(position.x - radius), int(position.x + radius + 1)):
-		for y in range(int(position.y - radius), int(position.y + radius + 1)):
-			if x >= 0 and x < Constants.GRID_WIDTH and y >= 0 and y < Constants.GRID_HEIGHT and x < grid.size() and y < grid[x].size():
-				if Vector2(x, y).distance_to(position) <= radius:
-					if grid[x][y].type == Constants.CellType.SAND:
-						# Store the properties of the sand before clearing
-						var sand_properties = grid[x][y]
+						else:
+							# Just apply velocity without moving the dirt
+							grid[x][y].velocity = impact_dir * impact_force * 0.5
+							
+				Constants.CellType.SAND:
+					# Sand is easily disturbed with varied particle effects
+					var sand_properties = grid[x][y].duplicate()
+					grid[x][y] = create_empty_cell()
+					
+					# Higher chance of creating flying sand particles for more dramatic effect
+					if randf() > 0.3:
+						# Calculate particle direction with some randomness
+						var particle_dir = impact_dir.rotated(randf_range(-0.5, 0.5))
+						var blast_force = impact_force * (1.0 + randf_range(-0.2, 0.3))
+						
+						# Add some upward bias for nicer visual effect
+						particle_dir.y -= randf_range(0.3, 0.8)
+						particle_dir = particle_dir.normalized()
+						
+						# Calculate new position
+						var new_x = int(x + particle_dir.x * blast_force)
+						var new_y = int(y + particle_dir.y * blast_force)
+						
+						# Check bounds and place the sand particle
+						if new_x >= 0 and new_x < Constants.GRID_WIDTH and new_y >= 0 and new_y < Constants.GRID_HEIGHT and new_x < grid.size() and new_y < grid[new_x].size():
+							if grid[new_x][new_y].type == Constants.CellType.EMPTY:
+								grid[new_x][new_y] = sand_properties
+								grid[new_x][new_y].velocity = particle_dir * blast_force * sand_properties.mass * 0.5
+								
+				Constants.CellType.WATER:
+					# Water splashes with impact
+					if impact_force > 1.5 and randf() > 0.5:
+						var water_properties = grid[x][y].duplicate()
 						grid[x][y] = create_empty_cell()
 						
-						# Create flying sand particles - more flying sand for more dramatic effect
-						if randf() > 0.3:  # Increased probability of flying sand (was 0.7)
-							# Calculate direction vector based on impact position
-							var dir_x = randf_range(-1.5, 1.5)  # Wider spread
-							var dir_y = randf_range(-3.0, -0.5)  # More upward motion
-							
-							# Add a bias in the direction of ball movement
-							var blast_dir = Vector2(dir_x, dir_y)
-							
-							var new_x = int(x + blast_dir.x)
-							var new_y = int(y + blast_dir.y)
-							if new_x >= 0 and new_x < Constants.GRID_WIDTH and new_y >= 0 and new_y < Constants.GRID_HEIGHT and new_x < grid.size() and new_y < grid[new_x].size():
-								if grid[new_x][new_y].type == Constants.CellType.EMPTY:
-									# Transfer the properties from the original sand
-									grid[new_x][new_y] = sand_properties
-									# Add velocity based on the blast direction
-									grid[new_x][new_y].velocity = blast_dir * sand_properties.mass * 0.5
+						# Calculate splash direction with more horizontal spread
+						var splash_dir = impact_dir.rotated(randf_range(-1.2, 1.2))
+						splash_dir.y *= 0.7  # Less vertical movement for water
+						
+						# Calculate new position
+						var new_x = int(x + splash_dir.x * impact_force * 0.8)
+						var new_y = int(y + splash_dir.y * impact_force * 0.8)
+						
+						# Check bounds and place the water particle
+						if new_x >= 0 and new_x < Constants.GRID_WIDTH and new_y >= 0 and new_y < Constants.GRID_HEIGHT and new_x < grid.size() and new_y < grid[new_x].size():
+							if grid[new_x][new_y].type == Constants.CellType.EMPTY:
+								grid[new_x][new_y] = water_properties
+								grid[new_x][new_y].velocity = splash_dir * impact_force * 0.4
 
 func update_sand_physics():
+	# Process sand in chunks - divide the grid into sections and process one per frame
+	var start_y = (Engine.get_frames_drawn() % 3) * (Constants.GRID_HEIGHT / 3)
+	var end_y = start_y + (Constants.GRID_HEIGHT / 3)
+	
 	# Update from bottom to top, right to left
-	for y in range(Constants.GRID_HEIGHT - 2, 0, -1):
+	for y in range(min(int(end_y), Constants.GRID_HEIGHT - 2), max(int(start_y), 0), -1):
 		for x in range(Constants.GRID_WIDTH - 1, 0, -1):
-			# First check if the current cell exists and is sand
-			if x < grid.size() and y < grid[x].size() and grid[x][y].type == Constants.CellType.SAND:
-				var cell = grid[x][y]
+			# Skip cells that don't need processing
+			if x >= grid.size() or y >= grid[x].size() or grid[x][y].type != Constants.CellType.SAND:
+				continue
 				
-				# Apply gravity to velocity based on cell mass
-				cell.velocity.y += Constants.GRAVITY * 0.01 * cell.mass
+			var cell = grid[x][y]
+			
+			# Apply gravity to velocity based on cell mass
+			cell.velocity.y += Constants.GRAVITY * 0.01 * cell.mass
+			
+			# Fast path for most common case - falling straight down
+			if y + 1 < grid[x].size():
+				var below_type = grid[x][y + 1].type
 				
-				# Check if space below is empty and within bounds - SAND FALLS QUICKLY
-				if y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.EMPTY:
-					# Sand always falls straight down through empty space (100% chance)
+				# Check if space below is empty - SAND FALLS QUICKLY
+				if below_type == Constants.CellType.EMPTY:
+					# Sand always falls straight down through empty space
 					grid[x][y + 1] = cell
 					grid[x][y] = create_empty_cell()
 					continue
 				
-				# NEW CODE: Check if space below is water - sand sinks in water just like dirt
-				elif y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.WATER:
+				# Check if space below is water - sand sinks in water
+				elif below_type == Constants.CellType.WATER:
 					var water_cell = grid[x][y + 1]
 					grid[x][y] = water_cell  # Replace sand with water
 					grid[x][y + 1] = cell    # Sand sinks
 					continue
 				
-				# If blocked below, try diagonal paths - SAND SPREADS EASILY
-				# Check if bottom right is empty
-				elif x + 1 < grid.size() and y + 1 < grid[x + 1].size() and grid[x + 1][y + 1].type == Constants.CellType.EMPTY:
+				# If blocked below, try diagonal paths - check both at once for efficiency
+				var can_move_right = x + 1 < grid.size() and y + 1 < grid[x + 1].size() and grid[x + 1][y + 1].type == Constants.CellType.EMPTY
+				var can_move_left = x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and grid[x - 1][y + 1].type == Constants.CellType.EMPTY
+				
+				if can_move_right and can_move_left:
+					# If both diagonals are available, randomly choose one with bias based on neighbors
+					if randf() > 0.5:
+						grid[x + 1][y + 1] = cell
+						grid[x][y] = create_empty_cell()
+					else:
+						grid[x - 1][y + 1] = cell
+						grid[x][y] = create_empty_cell()
+					continue
+				elif can_move_right:
 					grid[x + 1][y + 1] = cell
 					grid[x][y] = create_empty_cell()
 					continue
-				
-				# Check if bottom left is empty
-				elif x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and grid[x - 1][y + 1].type == Constants.CellType.EMPTY:
+				elif can_move_left:
 					grid[x - 1][y + 1] = cell
 					grid[x][y] = create_empty_cell()
 					continue
 				
-				# Additional random spread for natural sand flow - MORE RANDOM MOVEMENT
-				elif randf() > 0.7:  # 30% chance of random movement
-					# Try random diagonal movement with even higher probability if there's sand nearby
-					if x + 1 < grid.size() and y < grid[x + 1].size() and grid[x + 1][y].type == Constants.CellType.SAND:
-						if x + 2 < grid.size() and y + 1 < grid[x + 2].size() and grid[x + 2][y + 1].type == Constants.CellType.EMPTY:
-							grid[x + 2][y + 1] = cell
-							grid[x][y] = create_empty_cell()
-							continue
+				# Additional random spread for natural sand flow - only do for a small percentage
+				elif randf() > 0.9:  # Reduced from 0.7 to 0.9 (only 10% chance now)
+					# Only check extended diagonals if we have sand neighbors
+					var has_right_neighbor = x + 1 < grid.size() and y < grid[x + 1].size() and grid[x + 1][y].type == Constants.CellType.SAND
+					var has_left_neighbor = x - 1 >= 0 and x - 1 < grid.size() and y < grid[x - 1].size() and grid[x - 1][y].type == Constants.CellType.SAND
 					
-					# Check left as well
-					if x - 1 >= 0 and x - 1 < grid.size() and y < grid[x - 1].size() and grid[x - 1][y].type == Constants.CellType.SAND:
-						if x - 2 >= 0 and x - 2 < grid.size() and y + 1 < grid[x - 2].size() and grid[x - 2][y + 1].type == Constants.CellType.EMPTY:
-							grid[x - 2][y + 1] = cell
-							grid[x][y] = create_empty_cell()
-							continue
-				
-				# Apply dampening to velocity
-				cell.velocity *= cell.dampening
+					if has_right_neighbor and x + 2 < grid.size() and y + 1 < grid[x + 2].size() and grid[x + 2][y + 1].type == Constants.CellType.EMPTY:
+						grid[x + 2][y + 1] = cell
+						grid[x][y] = create_empty_cell()
+						continue
+					
+					if has_left_neighbor and x - 2 >= 0 and x - 2 < grid.size() and y + 1 < grid[x - 2].size() and grid[x - 2][y + 1].type == Constants.CellType.EMPTY:
+						grid[x - 2][y + 1] = cell
+						grid[x][y] = create_empty_cell()
+						continue
+			
+			# Apply dampening to velocity
+			cell.velocity *= cell.dampening
 
 func update_dirt_physics():
-	# Update from bottom to top, right to left for consistent physics
+	# For dirt, we'll only update cells that have been recently impacted
+	# This allows dirt to form stable tunnels and structures
+	
 	for y in range(Constants.GRID_HEIGHT - 2, 0, -1):
 		for x in range(Constants.GRID_WIDTH - 1, 0, -1):
-			# Check if the current cell exists and is dirt
-			if x < grid.size() and y < grid[x].size() and grid[x][y].type == Constants.CellType.DIRT:
-				var cell = grid[x][y]
-				
-				# Count dirt neighbors for cohesion mechanics
-				var dirt_neighbors = 0
-				for nx in range(max(0, x-1), min(Constants.GRID_WIDTH, x+2)):
-					for ny in range(max(0, y-1), min(Constants.GRID_HEIGHT, y+2)):
-						if nx != x or ny != y:  # Skip the cell itself
-							if nx < grid.size() and ny < grid[nx].size() and grid[nx][ny].type == Constants.CellType.DIRT:
-								dirt_neighbors += 1
-				
-				# Apply gravity to velocity based on cell mass
-				cell.velocity.y += Constants.GRAVITY * 0.01 * cell.mass
-				
-				# Check if we're on top of stone - dirt doesn't move when on stone
-				if y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.STONE:
+			# Skip cells that don't need processing
+			if x >= grid.size() or y >= grid[x].size() or grid[x][y].type != Constants.CellType.DIRT:
+				continue
+			
+			var cell = grid[x][y]
+			
+			# If this dirt cell has velocity, it's already in motion from an impact
+			var cell_in_motion = cell.velocity.length_squared() > 0.01
+			
+			# If dirt is not in motion, skip all physics (stays suspended in air)
+			if not cell_in_motion:
+				continue
+			
+			# For dirt in motion, apply similar physics to sand but with more cohesion
+			# Apply gravity to velocity based on cell mass
+			cell.velocity.y += Constants.GRAVITY * 0.01 * cell.mass
+			
+			# Check if space below is empty and we're moving
+			if y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.EMPTY:
+				grid[x][y + 1] = cell
+				grid[x][y] = create_empty_cell()
+				continue
+			
+			# Check if space below is water - dirt sinks in water
+			elif y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.WATER:
+				var water_cell = grid[x][y + 1]
+				grid[x][y] = water_cell  # Replace dirt with water
+				grid[x][y + 1] = cell  # Dirt sinks
+				continue
+			
+			# Only allow diagonal movement for dirt in motion with reduced probability
+			var diagonal_probability = 0.3  # 30% chance to move diagonally when in motion
+			
+			if randf() > diagonal_probability:
+				# Try right diagonal
+				if x + 1 < grid.size() and y + 1 < grid[x + 1].size() and grid[x + 1][y + 1].type == Constants.CellType.EMPTY:
+					grid[x + 1][y + 1] = cell
+					grid[x][y] = create_empty_cell()
 					continue
 				
-				# Determine if this is part of a chunk or an isolated dirt piece
-				var is_chunk = dirt_neighbors >= 3  # Consider 3+ neighbors as part of a chunk
-				
-				# Check if space below is EMPTY
-				if y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.EMPTY:
-					if is_chunk:
-						# Chunk behavior: always fall straight down like sand
-						grid[x][y + 1] = cell
-						grid[x][y] = create_empty_cell()
-						continue
-					else:
-						# Isolated dirt: limited falling with cohesion
-						var cohesion_factor = min(0.7, dirt_neighbors * 0.15)
-						if randf() > cohesion_factor:
-							grid[x][y + 1] = cell
-							grid[x][y] = create_empty_cell()
-							continue
-				
-				# Check if space below is water - dirt sinks in water
-				if y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.WATER:
-					var water_cell = grid[x][y + 1]
-					grid[x][y] = water_cell  # Replace dirt with water
-					grid[x][y + 1] = cell  # Dirt sinks
+				# Try left diagonal
+				if x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and grid[x - 1][y + 1].type == Constants.CellType.EMPTY:
+					grid[x - 1][y + 1] = cell
+					grid[x][y] = create_empty_cell()
 					continue
-				
-				# Diagonal movement depends on chunk status
-				if is_chunk:
-					# Chunk behavior: act like sand for diagonals
-					# Check if bottom right is empty
-					if x + 1 < grid.size() and y + 1 < grid[x + 1].size() and grid[x + 1][y + 1].type == Constants.CellType.EMPTY:
-						grid[x + 1][y + 1] = cell
-						grid[x][y] = create_empty_cell()
-						continue
-					
-					# Check if bottom left is empty
-					if x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and grid[x - 1][y + 1].type == Constants.CellType.EMPTY:
-						grid[x - 1][y + 1] = cell
-						grid[x][y] = create_empty_cell()
-						continue
-					
-					# For chunks: add some random spread like sand but with lower probability
-					elif randf() > 0.8:  # 20% chance (vs 30% for sand) to maintain more structure
-						# Try random diagonal movement if there's dirt nearby
-						if x + 1 < grid.size() and y < grid[x + 1].size() and grid[x + 1][y].type == Constants.CellType.DIRT:
-							if x + 2 < grid.size() and y + 1 < grid[x + 2].size() and grid[x + 2][y + 1].type == Constants.CellType.EMPTY:
-								grid[x + 2][y + 1] = cell
-								grid[x][y] = create_empty_cell()
-								continue
-						
-						# Check left as well
-						if x - 1 >= 0 and x - 1 < grid.size() and y < grid[x - 1].size() and grid[x - 1][y].type == Constants.CellType.DIRT:
-							if x - 2 >= 0 and x - 2 < grid.size() and y + 1 < grid[x - 2].size() and grid[x - 2][y + 1].type == Constants.CellType.EMPTY:
-								grid[x - 2][y + 1] = cell
-								grid[x][y] = create_empty_cell()
-								continue
-				else:
-					# Isolated dirt: very limited diagonal movement
-					var diagonal_probability = 0.85  # Only 15% chance to move diagonally
-					diagonal_probability += dirt_neighbors * 0.03  # Even less likely with neighbors
-					
-					if randf() > diagonal_probability and x + 1 < grid.size() and y + 1 < grid[x + 1].size() and grid[x + 1][y + 1].type == Constants.CellType.EMPTY:
-						grid[x + 1][y + 1] = cell
-						grid[x][y] = create_empty_cell()
-						continue
-					
-					if randf() > diagonal_probability and x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and grid[x - 1][y + 1].type == Constants.CellType.EMPTY:
-						grid[x - 1][y + 1] = cell
-						grid[x][y] = create_empty_cell()
-						continue
-				
-				# Apply dampening to velocity
-				cell.velocity *= cell.dampening
+			
+			# Apply dampening to velocity
+			cell.velocity *= cell.dampening
+			
+			# If velocity is very small, stop the motion completely
+			if cell.velocity.length_squared() < 0.01:
+				cell.velocity = Vector2.ZERO
+
+# Helper function to efficiently count dirt neighbors
+func count_dirt_neighbors(x, y):
+	var count = 0
+	# Use a simpler neighbor check pattern - just check the 4 adjacent cells first
+	var adjacent_coords = [
+		Vector2(x-1, y), Vector2(x+1, y),  # Left, Right
+		Vector2(x, y-1), Vector2(x, y+1)   # Up, Down
+	]
+	
+	for coord in adjacent_coords:
+		var nx = int(coord.x)
+		var ny = int(coord.y)
+		if nx >= 0 and nx < grid.size() and ny >= 0 and ny < grid[nx].size():
+			if grid[nx][ny].type == Constants.CellType.DIRT:
+				count += 1
+				# Early exit option: if we just need to know if there are 3+ neighbors
+				if count >= 3:
+					return count
+	
+	# Only check diagonals if we haven't found 3 neighbors yet
+	if count < 3:
+		var diagonal_coords = [
+			Vector2(x-1, y-1), Vector2(x+1, y-1),
+			Vector2(x-1, y+1), Vector2(x+1, y+1)
+		]
+		
+		for coord in diagonal_coords:
+			var nx = int(coord.x)
+			var ny = int(coord.y)
+			if nx >= 0 and nx < grid.size() and ny >= 0 and ny < grid[nx].size():
+				if grid[nx][ny].type == Constants.CellType.DIRT:
+					count += 1
+					if count >= 3:
+						return count
+	
+	return count
 
 func update_water_physics():
 	# Update from bottom to top, right to left

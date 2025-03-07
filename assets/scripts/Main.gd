@@ -15,6 +15,9 @@ var ball
 # Ball type tracking
 var current_ball_type = Constants.BallType.STANDARD
 
+# Shot tracking
+var _last_velocity_was_zero = true  # Add this line to declare the variable
+
 func _ready():
 	# Get references to nodes
 	sand_simulation = $SandSimulation
@@ -121,6 +124,7 @@ func initialize_level():
 	# Reset game state
 	game_won = false
 	stroke_count = 0
+	_last_velocity_was_zero = true  # Reset velocity tracking
 	
 	# Reset to standard ball type
 	if ball.has_method("switch_ball_type"):
@@ -219,15 +223,6 @@ func _input(event):
 	if game_won and event is InputEventKey and event.pressed and event.keycode == KEY_R:
 		# Restart game
 		_on_restart_game()
-		
-	if not game_won and ball.can_shoot() and event is InputEventMouseButton:
-		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			# Start shooting
-			ball.start_shooting()
-		elif event.button_index == MOUSE_BUTTON_LEFT and not event.pressed and ball.is_shooting:
-			# Release shot
-			ball.end_shooting()
-			stroke_count += 1
 	
 	# Ball type switching with number keys (1-5)
 	if not game_won and event is InputEventKey and event.pressed:
@@ -269,5 +264,14 @@ func _process(_delta):
 	# Update UI stroke count
 	if ui:
 		ui.update_stroke_count(stroke_count)
+	
+	# Increment stroke count when a shot is made
+	if ball and ball.ball_velocity.length() > 0.1:
+		# Check if this is a new shot (velocity was previously zero)
+		if _last_velocity_was_zero:
+			stroke_count += 1
+			_last_velocity_was_zero = false
+	else:
+		_last_velocity_was_zero = true
 	
 	queue_redraw() # Redraw UI every frame
