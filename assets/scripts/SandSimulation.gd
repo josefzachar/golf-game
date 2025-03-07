@@ -11,7 +11,7 @@ signal grid_updated(grid)
 func _ready():
 	# Set up the timer for sand simulation
 	var timer = Timer.new()
-	timer.wait_time = 0.01  # 20 updates per second
+	timer.wait_time = 0.04  # 20 updates per second
 	timer.autostart = true
 	timer.timeout.connect(_on_sand_update)  # Godot 4.x signal syntax
 	add_child(timer)
@@ -27,13 +27,33 @@ func initialize_grid():
 	if current_level_path != "" and FileAccess.file_exists(current_level_path):
 		# Load level from JSON
 		level_data = LevelInit.load_from_json(current_level_path)
-		grid = convert_grid_to_cells(level_data.grid)
-		hole_position = level_data.hole_position
+		
+		# Check if the level_data is a dictionary with 'grid' key or just a grid directly
+		if level_data is Dictionary and level_data.has("grid"):
+			grid = convert_grid_to_cells(level_data.grid)
+			
+			# If there are cell properties, apply them to the grid
+			if level_data.has("cell_properties"):
+				apply_cell_properties(level_data.cell_properties)
+		else:
+			grid = convert_grid_to_cells(level_data)
+			
+		hole_position = level_data.hole_position if level_data is Dictionary and level_data.has("hole_position") else hole_position
 		print("Loaded level from: ", current_level_path)
 	else:
 		# Use the LevelInit to create our grid procedurally
-		var basic_grid = LevelInit.create_grid(hole_position)
-		grid = convert_grid_to_cells(basic_grid)
+		var generated_data = LevelInit.create_varied_properties_level(hole_position)
+		
+		# Check if the result is a dictionary with grid key or just a grid
+		if generated_data is Dictionary and generated_data.has("grid"):
+			grid = convert_grid_to_cells(generated_data.grid)
+			
+			# If there are cell properties, apply them to the grid
+			if generated_data.has("cell_properties"):
+				apply_cell_properties(generated_data.cell_properties)
+		else:
+			grid = convert_grid_to_cells(generated_data)
+			
 		print("Generated procedural level")
 	
 	# Ensure the grid has the correct dimensions
@@ -41,6 +61,20 @@ func initialize_grid():
 	
 	# Notify listeners about the grid
 	emit_signal("grid_updated", grid)
+	
+# Apply cell properties from a properties dictionary to the grid cells
+func apply_cell_properties(cell_properties):
+	for cell_key in cell_properties.keys():
+		var coords = cell_key.split(",")
+		if coords.size() == 2:
+			var x = coords[0].to_int()
+			var y = coords[1].to_int()
+			
+			if x >= 0 and x < grid.size() and y >= 0 and y < grid[x].size():
+				# Apply each property to the cell
+				var props = cell_properties[cell_key]
+				for prop in props:
+					grid[x][y][prop] = props[prop]
 
 # Convert a basic grid of types to a grid of cell objects
 func convert_grid_to_cells(basic_grid):
