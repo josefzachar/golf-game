@@ -32,6 +32,9 @@ func _ready():
 	# Force an initial redraw to make elements visible
 	queue_redraw()
 	print("LevelEditor initialized with grid size: ", Constants.GRID_WIDTH, "x", Constants.GRID_HEIGHT)
+	
+	# Check if we're being asked to edit a level
+	call_deferred("check_for_level_to_edit")
 
 func initialize_grid():
 	grid = []
@@ -195,6 +198,33 @@ func _on_load_file_selected(path):
 	
 	# Force redraw
 	queue_redraw()
+	
+# Add this code to your LevelEditor.gd file, after the _ready() function
+
+# Function to check for and load level data coming from the game
+func check_for_level_to_edit():
+	var lvl_transfer_singleton = get_node_or_null("/root/LevelTransfer")
+	if lvl_transfer_singleton and lvl_transfer_singleton.is_level_from_editor():
+		var level_info = lvl_transfer_singleton.get_level_info()
+		if level_info and level_info.has("path"):
+			# Load the level
+			print("LevelEditor: Loading level from LevelTransfer: ", level_info)
+			
+			# Check if file exists
+			if FileAccess.file_exists(level_info.path):
+				# Use the existing load function
+				_on_load_file_selected(level_info.path)
+				
+				# Update status
+				if ui_controller:
+					ui_controller.update_status("Loaded level for editing: " + level_name)
+			else:
+				print("LevelEditor: ERROR - Level file not found: ", level_info.path)
+				if ui_controller:
+					ui_controller.update_status("Error: Level file not found")
+			
+			# Clear the transfer data
+			lvl_transfer_singleton.clear_level_info()
 
 # Test the current level - Fixed implementation using singleton
 func test_level():

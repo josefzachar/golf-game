@@ -16,3 +16,4 @@ res://assets/scripts/LevelSaver.gd
 res://assets/scripts/EditorUIController.gd
 res://assets/scripts/LevelTransfer.gd
 res://assets/scripts/Main.gd
+res://assets/scripts/UI.gd

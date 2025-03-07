@@ -6,6 +6,7 @@ var game_won = false
 var current_level = ""  # Default level (procedurally generated)
 var level_json_path = ""
 var pause_menu
+var ui
 
 # References to other nodes
 var sand_simulation
@@ -22,10 +23,23 @@ func _ready():
 		if ui_scene:
 			var ui_instance = ui_scene.instantiate()
 			add_child(ui_instance)
+			ui = ui_instance
+			
 			# Connect UI signals
-			ui_instance.restart_game.connect(_on_restart_game)
+			ui.restart_game.connect(_on_restart_game)
+			ui.edit_level.connect(_on_edit_level)
+			ui.return_to_menu.connect(_on_return_to_main_menu)
 		else:
 			print("UI scene not found or not loaded correctly")
+	else:
+		ui = $UI
+		# Connect UI signals if it already exists
+		if not ui.restart_game.is_connected(_on_restart_game):
+			ui.restart_game.connect(_on_restart_game)
+		if not ui.edit_level.is_connected(_on_edit_level):
+			ui.edit_level.connect(_on_edit_level)
+		if not ui.return_to_menu.is_connected(_on_return_to_main_menu):
+			ui.return_to_menu.connect(_on_return_to_main_menu)
 			
 	pause_menu = load("res://assets/scenes/PauseMenu.tscn").instantiate()
 	add_child(pause_menu)
@@ -40,11 +54,10 @@ func _ready():
 			level_json_path = level_info.path
 			
 			# Update UI if available
-			if has_node("UI") and level_info.has("name"):
-				$UI.update_level_name(level_info.name)
+			if ui and level_info.has("name"):
+				ui.update_level_name(level_info.name)
 			
-			# Clear the transfer data so it doesn't persist
-			level_transfer.clear_level_info()
+			# Don't clear the transfer data - we need it to know if we can edit this level
 	else:
 		# Look for level command line arguments or level selection
 		var args = OS.get_cmdline_args()
@@ -63,7 +76,7 @@ func _ready():
 	pause_menu.return_to_main_menu.connect(_on_return_to_main_menu)
 
 func initialize_level():
-	if current_level:
+	if current_level is Dictionary and current_level.has("path"):
 		level_json_path = current_level.path
 	
 	if level_json_path != "" and FileAccess.file_exists(level_json_path):
@@ -82,6 +95,7 @@ func initialize_level():
 			if level_data.has("starting_position"):
 				var start_pos = Vector2(level_data.starting_position.x, level_data.starting_position.y)
 				ball.ball_position = start_pos
+				ball.default_position = start_pos  # Set the default position too
 				ball.update_ball_in_grid()
 				print("Set ball starting position to: ", start_pos)
 	else:
@@ -92,51 +106,70 @@ func initialize_level():
 	game_won = false
 	stroke_count = 0
 
-# FIX THIS
 func load_level(level_info):
 	current_level = level_info
-	level_json_path = level_info.path
+	level_json_path = level_info.path if level_info is Dictionary and level_info.has("path") else level_info
 	initialize_level()
 	
 	# Update UI if it exists
-	if has_node("UI"):
-		$UI.update_level_name(level_info.name)
+	if ui and current_level is Dictionary and current_level.has("name"):
+		ui.update_level_name(current_level.name)
 
 func _on_ball_in_hole():
 	game_won = true
 	print("You won! Total strokes: ", stroke_count)
 	
-	# Pause all physics
-	var victory_label_text = "Victory! Strokes: " + str(stroke_count) + "\nPress R to restart"
-	
 	# Update UI if it exists
-	if has_node("UI"):
-		$UI.show_win_message(stroke_count)
-	else:
-		# Show a simple on-screen message if UI doesn't exist
-		print(victory_label_text)
+	if ui:
+		ui.show_win_message(stroke_count)
 
 func _on_restart_game():
 	initialize_level()
 	ball.reset_position()
-
-func _draw():
-	# Draw UI
-	draw_string(ThemeDB.fallback_font, Vector2(20, 30), "Strokes: " + str(stroke_count))
 	
-	if game_won:
-		draw_string(ThemeDB.fallback_font, 
-					Vector2(Constants.GRID_WIDTH * Constants.GRID_SIZE / 2 - 100, Constants.GRID_HEIGHT * Constants.GRID_SIZE / 2), 
-					"You Won! Strokes: " + str(stroke_count))
-		draw_string(ThemeDB.fallback_font, 
-					Vector2(Constants.GRID_WIDTH * Constants.GRID_SIZE / 2 - 100, Constants.GRID_HEIGHT * Constants.GRID_SIZE / 2 + 30), 
-					"Press R to restart")
+	# Reset the stroke count
+	stroke_count = 0
+	
+	# Reset game state
+	game_won = false
+
+func _on_edit_level():
+	# Only allow editing if we have a valid level from editor
+	var level_transfer = get_node_or_null("/root/LevelTransfer")
+	if level_transfer and level_transfer.is_level_from_editor():
+		# Get the current level info and pass it back to the editor
+		var level_info = level_transfer.get_level_info()
+		
+		# Set the level to be loaded in the editor
+		level_transfer.set_level_for_transfer(level_info)
+		
+		# Change to the level editor scene
+		get_tree().change_scene_to_file("res://assets/scenes/LevelEditor.tscn")
+	else:
+		# No editable level - show a message
+		if ui:
+			ui.message_label.text = "This level cannot be edited"
+			ui.message_label.show()
+			
+			# Create a timer to hide the message
+			var timer = Timer.new()
+			add_child(timer)
+			timer.wait_time = 2.0
+			timer.one_shot = true
+			timer.timeout.connect(func(): ui.message_label.hide())
+			timer.start()
+
+func _on_return_to_main_menu():
+	# Unpause the game before changing scenes
+	get_tree().paused = false
+	
+	# Change to the main menu scene
+	get_tree().change_scene_to_file("res://assets/scenes/MainMenu.tscn")
 
 func _input(event):
 	if game_won and event is InputEventKey and event.pressed and event.keycode == KEY_R:
 		# Restart game
-		initialize_level()
-		ball.reset_position()
+		_on_restart_game()
 		
 	if not game_won and ball.can_shoot() and event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
@@ -164,13 +197,6 @@ func _input(event):
 			pause_menu.hide_menu()
 		else:
 			pause_menu.show_menu()
-			
-func _on_return_to_main_menu():
-	# Unpause the game before changing scenes
-	get_tree().paused = false
-	
-	# Change to the main menu scene
-	get_tree().change_scene_to_file("res://assets/scenes/MainMenu.tscn")
 
 func _on_level_file_selected(path):
 	print("Selected level: ", path)
@@ -179,7 +205,7 @@ func _on_level_file_selected(path):
 
 func _process(_delta):
 	# Update UI stroke count
-	if has_node("UI"):
-		$UI.update_stroke_count(stroke_count)
+	if ui:
+		ui.update_stroke_count(stroke_count)
 	
-	queue_redraw() # Redraw UI every frame (Godot 4.x uses queue_redraw instead of update)
+	queue_redraw() # Redraw UI every frame
