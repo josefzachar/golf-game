@@ -30,13 +30,29 @@ func _ready():
 	pause_menu = load("res://assets/scenes/PauseMenu.tscn").instantiate()
 	add_child(pause_menu)
 	
-	# Look for level command line arguments or level selection
-	var args = OS.get_cmdline_args()
-	for arg in args:
-		if arg.begins_with("--level="):
-			var level_name = arg.split("=")[1]
-			level_json_path = "res://assets/levels/" + level_name + ".json"
-			print("Loading level from command line: ", level_json_path)
+	# Check for level from LevelTransfer singleton
+	var level_transfer = get_node_or_null("/root/LevelTransfer")
+	if level_transfer and level_transfer.is_level_from_editor():
+		var level_info = level_transfer.get_level_info()
+		if level_info:
+			print("Main: Loading level from LevelTransfer: ", level_info)
+			current_level = level_info
+			level_json_path = level_info.path
+			
+			# Update UI if available
+			if has_node("UI") and level_info.has("name"):
+				$UI.update_level_name(level_info.name)
+			
+			# Clear the transfer data so it doesn't persist
+			level_transfer.clear_level_info()
+	else:
+		# Look for level command line arguments or level selection
+		var args = OS.get_cmdline_args()
+		for arg in args:
+			if arg.begins_with("--level="):
+				var level_name = arg.split("=")[1]
+				level_json_path = "res://assets/levels/" + level_name + ".json"
+				print("Loading level from command line: ", level_json_path)
 	
 	# Initialize the simulation with level data
 	initialize_level()

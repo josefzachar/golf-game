@@ -5,8 +5,14 @@ res://assets/scenes/LevelSelect.tscn
 res://assets/scenes/MainMenu.tscn
 res://assets/scenes/LevelEditor.tscn
 res://assets/scenes/PauseMenu.tscn
-res://assets/scripts/Constants.gd
-res://assets/scripts/Ball.gd
 res://assets/scripts/SandSimulation.gd
+res://assets/scripts/Ball.gd
+res://assets/scripts/Constants.gd
+res://assets/scripts/EditorVisualizationController.gd
 res://assets/scripts/LevelEditor.gd
-res://assets/levels/level_1.json
+res://assets/scripts/EditorUIPanels.gd
+res://assets/scripts/MainMenu.gd
+res://assets/scripts/LevelSaver.gd
+res://assets/scripts/EditorUIController.gd
+res://assets/scripts/LevelTransfer.gd
+res://assets/scripts/Main.gd

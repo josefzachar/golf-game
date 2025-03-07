@@ -22,7 +22,7 @@ func _ready():
 		var level_manager = Node.new()
 		level_manager.name = "LevelManager"
 		level_manager.set_script(load("res://assets/scripts/LevelManager.gd"))
-		get_tree().root.add_child(level_manager)
+		get_tree().root.add_child.call_deferred(level_manager)
 
 func _on_play_pressed():
 	# Show level selection screen

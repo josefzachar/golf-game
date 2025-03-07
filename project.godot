@@ -23,12 +23,18 @@ config/uuid="your-unique-uuid"
 Constants="*res://assets/scripts/Constants.gd"
 LevelInit="*res://assets/scripts/LevelInit.gd"
 LevelManager="*res://assets/scripts/LevelManager.gd"
+EditorCell="*res://assets/scripts/EditorCell.gd"
+EditorBrushController="*res://assets/scripts/EditorBrushController.gd"
+EditorPropertyController="*res://assets/scripts/EditorPropertyController.gd"
+EditorVisualizationController="*res://assets/scripts/EditorVisualizationController.gd"
+LevelSaver="*res://assets/scripts/LevelSaver.gd"
+LevelTransfer="*res://assets/scripts/LevelTransfer.gd"
 
 [display]
 
 window/size/viewport_width=3200
 window/size/viewport_height=1920
-window/stretch/scale=2.0
+window/stretch/scale=1.8
 
 [general]
 
