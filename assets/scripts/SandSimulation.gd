@@ -474,34 +474,49 @@ func update_sand_physics():
 				# Apply gravity to velocity based on cell mass
 				cell.velocity.y += Constants.GRAVITY * 0.01 * cell.mass
 				
-				# Check if space below is empty and within bounds
+				# Check if space below is empty and within bounds - SAND FALLS QUICKLY
 				if y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.EMPTY:
-					# Transfer this cell to the position below
+					# Sand always falls straight down through empty space (100% chance)
 					grid[x][y + 1] = cell
 					grid[x][y] = create_empty_cell()
+					continue
 				
-				# Check if bottom right is empty and safe to move to
-				elif x + 1 < grid.size() and y + 1 < grid[x + 1].size() and y + 2 < grid[x + 1].size() and \
-					 grid[x + 1][y + 1].type == Constants.CellType.EMPTY and grid[x + 1][y + 2].type == Constants.CellType.EMPTY:
+				# NEW CODE: Check if space below is water - sand sinks in water just like dirt
+				elif y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.WATER:
+					var water_cell = grid[x][y + 1]
+					grid[x][y] = water_cell  # Replace sand with water
+					grid[x][y + 1] = cell    # Sand sinks
+					continue
+				
+				# If blocked below, try diagonal paths - SAND SPREADS EASILY
+				# Check if bottom right is empty
+				elif x + 1 < grid.size() and y + 1 < grid[x + 1].size() and grid[x + 1][y + 1].type == Constants.CellType.EMPTY:
 					grid[x + 1][y + 1] = cell
 					grid[x][y] = create_empty_cell()
+					continue
 				
-				# Check if bottom left is empty and safe to move to
-				elif x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and y + 2 < grid[x - 1].size() and \
-					 grid[x - 1][y + 1].type == Constants.CellType.EMPTY and grid[x - 1][y + 2].type == Constants.CellType.EMPTY:
+				# Check if bottom left is empty
+				elif x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and grid[x - 1][y + 1].type == Constants.CellType.EMPTY:
 					grid[x - 1][y + 1] = cell
 					grid[x][y] = create_empty_cell()
+					continue
 				
-				# Random spread to bottom right with probability influenced by mass (lighter particles spread more)
-				elif x + 1 < grid.size() and y + 1 < grid[x + 1].size() and randf() > (0.8 + cell.mass * 0.1) and grid[x + 1][y + 1].type == Constants.CellType.EMPTY:
-					grid[x + 1][y + 1] = cell
-					grid[x][y] = create_empty_cell()
-				
-				# Random spread to bottom left with probability influenced by mass
-				elif x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and randf() > (0.8 + cell.mass * 0.1) and grid[x - 1][y + 1].type == Constants.CellType.EMPTY:
-					grid[x - 1][y + 1] = cell
-					grid[x][y] = create_empty_cell()
+				# Additional random spread for natural sand flow - MORE RANDOM MOVEMENT
+				elif randf() > 0.7:  # 30% chance of random movement
+					# Try random diagonal movement with even higher probability if there's sand nearby
+					if x + 1 < grid.size() and y < grid[x + 1].size() and grid[x + 1][y].type == Constants.CellType.SAND:
+						if x + 2 < grid.size() and y + 1 < grid[x + 2].size() and grid[x + 2][y + 1].type == Constants.CellType.EMPTY:
+							grid[x + 2][y + 1] = cell
+							grid[x][y] = create_empty_cell()
+							continue
 					
+					# Check left as well
+					if x - 1 >= 0 and x - 1 < grid.size() and y < grid[x - 1].size() and grid[x - 1][y].type == Constants.CellType.SAND:
+						if x - 2 >= 0 and x - 2 < grid.size() and y + 1 < grid[x - 2].size() and grid[x - 2][y + 1].type == Constants.CellType.EMPTY:
+							grid[x - 2][y + 1] = cell
+							grid[x][y] = create_empty_cell()
+							continue
+				
 				# Apply dampening to velocity
 				cell.velocity *= cell.dampening
 
@@ -513,88 +528,87 @@ func update_dirt_physics():
 			if x < grid.size() and y < grid[x].size() and grid[x][y].type == Constants.CellType.DIRT:
 				var cell = grid[x][y]
 				
-				# MAJOR CHANGE: Dirt is now much more stable - like a solid with occasional movement
-				# Significantly reduced movement probability - dirt behaves more like a solid
-				if randf() > 0.9:  # Only 10% chance to move (was 0.5) - much more stable
-					# Apply gravity to velocity based on cell mass
-					cell.velocity.y += Constants.GRAVITY * 0.01 * cell.mass
-					
-					# Check if we're on top of stone - dirt still doesn't move when on stone
-					if y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.STONE:
-						continue
-						
-					# Check if we're on top of other dirt - also very stable
-					if y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.DIRT:
-						# Even less movement when on dirt - create stable structures
-						if randf() > 0.7:  # 70% chance to stay put
-							continue
-						
-					# Check if space below is empty and within bounds - basic gravity
-					if y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.EMPTY:
+				# Count dirt neighbors for cohesion mechanics
+				var dirt_neighbors = 0
+				for nx in range(max(0, x-1), min(Constants.GRID_WIDTH, x+2)):
+					for ny in range(max(0, y-1), min(Constants.GRID_HEIGHT, y+2)):
+						if nx != x or ny != y:  # Skip the cell itself
+							if nx < grid.size() and ny < grid[nx].size() and grid[nx][ny].type == Constants.CellType.DIRT:
+								dirt_neighbors += 1
+				
+				# Apply gravity to velocity based on cell mass
+				cell.velocity.y += Constants.GRAVITY * 0.01 * cell.mass
+				
+				# Check if we're on top of stone - dirt doesn't move when on stone
+				if y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.STONE:
+					continue
+				
+				# Determine if this is part of a chunk or an isolated dirt piece
+				var is_chunk = dirt_neighbors >= 3  # Consider 3+ neighbors as part of a chunk
+				
+				# Check if space below is EMPTY
+				if y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.EMPTY:
+					if is_chunk:
+						# Chunk behavior: always fall straight down like sand
 						grid[x][y + 1] = cell
 						grid[x][y] = create_empty_cell()
 						continue
-					
-					# Check if space below is water - dirt sinks in water (keeping this behavior)
-					if y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.WATER:
-						var water_cell = grid[x][y + 1]
-						grid[x][y] = water_cell  # Replace dirt with water
-						grid[x][y + 1] = cell  # Dirt sinks
-						continue
-						
-					# Dirt cascading is now much more limited
-					# Bottom-right check with very low probability
-					if x + 1 < grid.size() and y + 1 < grid[x + 1].size() and randf() > 0.9 and grid[x + 1][y + 1].type == Constants.CellType.EMPTY:
+					else:
+						# Isolated dirt: limited falling with cohesion
+						var cohesion_factor = min(0.7, dirt_neighbors * 0.15)
+						if randf() > cohesion_factor:
+							grid[x][y + 1] = cell
+							grid[x][y] = create_empty_cell()
+							continue
+				
+				# Check if space below is water - dirt sinks in water
+				if y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.WATER:
+					var water_cell = grid[x][y + 1]
+					grid[x][y] = water_cell  # Replace dirt with water
+					grid[x][y + 1] = cell  # Dirt sinks
+					continue
+				
+				# Diagonal movement depends on chunk status
+				if is_chunk:
+					# Chunk behavior: act like sand for diagonals
+					# Check if bottom right is empty
+					if x + 1 < grid.size() and y + 1 < grid[x + 1].size() and grid[x + 1][y + 1].type == Constants.CellType.EMPTY:
 						grid[x + 1][y + 1] = cell
 						grid[x][y] = create_empty_cell()
 						continue
-						
-					# Bottom-left check with very low probability
-					elif x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and randf() > 0.9 and grid[x - 1][y + 1].type == Constants.CellType.EMPTY:
+					
+					# Check if bottom left is empty
+					if x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and grid[x - 1][y + 1].type == Constants.CellType.EMPTY:
 						grid[x - 1][y + 1] = cell
 						grid[x][y] = create_empty_cell()
 						continue
-				
-				# Apply dampening to velocity
-				cell.velocity *= cell.dampening
-	# Update from bottom to top, right to left for consistent physics
-	for y in range(Constants.GRID_HEIGHT - 2, 0, -1):
-		for x in range(Constants.GRID_WIDTH - 1, 0, -1):
-			# Check if the current cell exists and is dirt
-			if x < grid.size() and y < grid[x].size() and grid[x][y].type == Constants.CellType.DIRT:
-				var cell = grid[x][y]
-				
-				# Dirt moves more like sand but less frequently - lower threshold for movement
-				if randf() > 0.5:  # Higher chance to move than current code (was 0.7)
-					# Apply gravity to velocity based on cell mass
-					cell.velocity.y += Constants.GRAVITY * 0.01 * cell.mass
 					
-					# Check if we're on top of stone - dirt still doesn't move when on stone
-					if y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.STONE:
-						continue
+					# For chunks: add some random spread like sand but with lower probability
+					elif randf() > 0.8:  # 20% chance (vs 30% for sand) to maintain more structure
+						# Try random diagonal movement if there's dirt nearby
+						if x + 1 < grid.size() and y < grid[x + 1].size() and grid[x + 1][y].type == Constants.CellType.DIRT:
+							if x + 2 < grid.size() and y + 1 < grid[x + 2].size() and grid[x + 2][y + 1].type == Constants.CellType.EMPTY:
+								grid[x + 2][y + 1] = cell
+								grid[x][y] = create_empty_cell()
+								continue
 						
-					# Check if space below is empty and within bounds - basic gravity
-					if y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.EMPTY:
-						grid[x][y + 1] = cell
-						grid[x][y] = create_empty_cell()
-						continue
+						# Check left as well
+						if x - 1 >= 0 and x - 1 < grid.size() and y < grid[x - 1].size() and grid[x - 1][y].type == Constants.CellType.DIRT:
+							if x - 2 >= 0 and x - 2 < grid.size() and y + 1 < grid[x - 2].size() and grid[x - 2][y + 1].type == Constants.CellType.EMPTY:
+								grid[x - 2][y + 1] = cell
+								grid[x][y] = create_empty_cell()
+								continue
+				else:
+					# Isolated dirt: very limited diagonal movement
+					var diagonal_probability = 0.85  # Only 15% chance to move diagonally
+					diagonal_probability += dirt_neighbors * 0.03  # Even less likely with neighbors
 					
-					# Check if space below is water - dirt sinks in water (keeping this behavior)
-					if y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.WATER:
-						var water_cell = grid[x][y + 1]
-						grid[x][y] = water_cell  # Replace dirt with water
-						grid[x][y + 1] = cell  # Dirt sinks
-						continue
-						
-					# Dirt should now cascade more like sand but with higher threshold
-					# Bottom-right check
-					if x + 1 < grid.size() and y + 1 < grid[x + 1].size() and randf() > 0.7 and grid[x + 1][y + 1].type == Constants.CellType.EMPTY:
+					if randf() > diagonal_probability and x + 1 < grid.size() and y + 1 < grid[x + 1].size() and grid[x + 1][y + 1].type == Constants.CellType.EMPTY:
 						grid[x + 1][y + 1] = cell
 						grid[x][y] = create_empty_cell()
 						continue
-						
-					# Bottom-left check
-					elif x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and randf() > 0.7 and grid[x - 1][y + 1].type == Constants.CellType.EMPTY:
+					
+					if randf() > diagonal_probability and x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and grid[x - 1][y + 1].type == Constants.CellType.EMPTY:
 						grid[x - 1][y + 1] = cell
 						grid[x][y] = create_empty_cell()
 						continue
