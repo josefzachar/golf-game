@@ -28,7 +28,8 @@ func handle_stone_detection():
 		
 		# For sticky ball, always stop completely. For other balls, use normal logic
 		if ball.current_ball_type == Constants.BallType.STICKY:
-			ball.ball_velocity = Vector2.ZERO  # Complete stop for sticky ball
+			ball.ball_velocity.x = 0
+			ball.ball_velocity.y = 0  # Force to absolute zero
 		else:
 			ball.ball_velocity = Vector2.ZERO  # Complete stop - no velocity at all
 		
@@ -116,8 +117,9 @@ func handle_stone_surface(check_pos_below):
 	
 	# Different behavior based on ball type
 	if ball.current_ball_type == Constants.BallType.STICKY:
-		# Sticky ball stops immediately on stone
-		ball.ball_velocity = Vector2.ZERO
+		# Force velocity to absolute zero to ensure shooting works
+		ball.ball_velocity.x = 0
+		ball.ball_velocity.y = 0
 	else:
 		# INCREASED FRICTION: Apply much stronger horizontal friction on stone
 		if abs(ball.ball_velocity.x) > 0.1:

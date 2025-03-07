@@ -128,7 +128,13 @@ func can_shoot():
 	# Don't allow shooting if game is won
 	if main_node and main_node.has_method("get") and main_node.get("game_won"):
 		return false
-	return ball_velocity.length() < 0.1
+		
+	# Special case: if at bottom edge, allow shooting regardless of velocity
+	if ball_position.y >= Constants.GRID_HEIGHT - 1.5:
+		return true
+		
+	# Use a higher threshold matching REST_THRESHOLD from Constants.gd
+	return ball_velocity.length() < Constants.REST_THRESHOLD
 
 func _draw():
 	# Draw the ball with current ball type color

@@ -167,7 +167,14 @@ func handle_boundary_collisions(new_ball_position):
 		if ball.current_ball_type == Constants.BallType.STICKY:
 			ball.ball_velocity = Vector2.ZERO  # Sticky ball sticks to floor
 		else:
-			ball.ball_velocity.y = -ball.ball_velocity.y * bounce_factor
+			# Apply strong horizontal friction at the bottom edge
+			ball.ball_velocity.x *= 0.8  # Add significant friction to horizontal movement
+			
+			# If moving slowly, stop completely to allow shooting
+			if ball.ball_velocity.length() < 0.5:
+				ball.ball_velocity = Vector2.ZERO
+			else:
+				ball.ball_velocity.y = -ball.ball_velocity.y * bounce_factor
 		bounced = true
 	
 	# Create a small crater at boundary if bounced with enough force

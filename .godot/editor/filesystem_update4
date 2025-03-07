@@ -5,5 +5,7 @@ res://assets/scenes/LevelSelect.tscn
 res://assets/scenes/MainMenu.tscn
 res://assets/scenes/LevelEditor.tscn
 res://assets/scenes/PauseMenu.tscn
-res://assets/scripts/BallAiming.gd
+res://assets/scripts/SandSimulation.gd
 res://assets/scripts/Ball.gd
+res://assets/scripts/BallCollistionPhysics.gd
+res://assets/scripts/BallSurfacePhysics.gd

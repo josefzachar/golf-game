@@ -11,7 +11,7 @@ signal grid_updated(grid)
 func _ready():
 	# Set up the timer for sand simulation
 	var timer = Timer.new()
-	timer.wait_time = 0.04  # 20 updates per second
+	timer.wait_time = 0.02  # 20 updates per second
 	timer.autostart = true
 	timer.timeout.connect(_on_sand_update)  # Godot 4.x signal syntax
 	add_child(timer)

@@ -8,6 +8,6 @@ script = ExtResource("1_xblvr")
 [node name="TitleLabel" type="Label" parent="."]
 offset_left = 10.0
 offset_top = 10.0
-offset_right = 290.0
+offset_right = 420.0
 offset_bottom = 40.0
 text = "Level Editor"

@@ -34,7 +34,7 @@ LevelTransfer="*res://assets/scripts/LevelTransfer.gd"
 
 window/size/viewport_width=3200
 window/size/viewport_height=1920
-window/stretch/scale=1.8
+window/stretch/scale=1.4
 
 [general]
 
