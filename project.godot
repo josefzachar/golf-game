@@ -40,6 +40,10 @@ window/stretch/scale=1.8
 
 config_version=4
 
+[gui]
+
+theme/custom_font="res://assets/fonts/pixel_font.ttf"
+
 [rendering]
 
 vulkan/enable_vulkan=false

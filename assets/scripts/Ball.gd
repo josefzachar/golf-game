@@ -25,7 +25,7 @@ func _ready():
 	# Initialize components
 	physics_handler = BallPhysics.new(self)
 	special_abilities = BallSpecialAbilities.new(self)
-	aiming_system = BallAiming.new(self)
+	aiming_system = load("res://assets/scripts/BallAiming.gd").new(self)
 	
 	# Initialize ball properties
 	update_ball_properties()
