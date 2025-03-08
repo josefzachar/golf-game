@@ -23,6 +23,12 @@ var explosion_active = false
 var explosion_timer = 0.0
 var explosion_frames = []  # For storing predefined explosion frame patterns
 
+# Rolling animation variables
+var ball_rotation = 0.0  # Current rotation angle in radians
+var last_position = Vector2.ZERO  # Track last position to calculate movement
+var ball_radius = 1.5  # Ball radius in grid cells (slightly larger than default)
+var ball_pixels = []  # Array to store the pixels that make up the ball
+
 # Signals
 signal ball_in_hole
 signal ball_type_changed(type)
@@ -52,13 +58,45 @@ func _ready():
 		add_child(timer)
 		timer.start()
 	
-	# Initialize explosion frame patterns (pixel art explosion animation)
+	# Initialize explosion frame patterns
 	_initialize_explosion_frames()
+	
+	# Initialize ball pixels pattern
+	_initialize_ball_pixels()
+	
+	# Initialize last position
+	last_position = ball_position
+
+# Initialize the pixels that make up our larger ball
+func _initialize_ball_pixels():
+	ball_pixels.clear()
+	
+	# Create a circular pattern of pixels
+	var pixel_size = Constants.GRID_SIZE / 1  # Size of each component pixel
+	var visual_radius = ball_radius * Constants.GRID_SIZE / pixel_size
+	
+	# Create the ball pixel pattern
+	for x in range(-int(visual_radius)-1, int(visual_radius)+2):
+		for y in range(-int(visual_radius)-1, int(visual_radius)+2):
+			var dist = Vector2(x, y).length()
+			if dist <= visual_radius:
+				# Determine color based on position (create some pattern)
+				var pattern_value = (x + y) % 2 == 0  # Checkerboard pattern
+				
+				# Add this pixel to our ball
+				ball_pixels.append({
+					"offset": Vector2(x, y) * pixel_size,
+					"size": pixel_size,
+					"pattern": pattern_value
+				})
 
 func _process(delta):
 	# Update aiming system
 	if aiming_system:
 		aiming_system.update()
+	
+	# Update ball rotation based on horizontal velocity
+	update_ball_rotation(delta)
 	
 	# Update explosion particles
 	if explosion_active:
@@ -93,6 +131,30 @@ func _process(delta):
 	
 	# Request redraw for visual updates
 	queue_redraw()
+
+func update_ball_rotation(delta):
+	# Only update if we have a valid position
+	if last_position != Vector2.ZERO:
+		# Calculate movement since last frame
+		var movement = ball_position - last_position
+		
+		# Update rotation based on horizontal movement
+		var roll_factor = 8.0  # Controls how fast the ball rotates
+		
+		# Simplified calculation that doesn't rely on Constants.GRID_SIZE
+		var rotation_amount = movement.x * roll_factor / (ball_radius * 8.0)  # Use 8.0 as a fixed value instead
+		
+		# Adjust rotation based on speed (faster = more rotation)
+		ball_rotation += rotation_amount
+		
+		# Keep rotation within 0 to 2π
+		if ball_rotation > 2 * PI:
+			ball_rotation -= 2 * PI
+		elif ball_rotation < 0:
+			ball_rotation += 2 * PI
+	
+	# Store current position for next frame
+	last_position = ball_position
 
 func _input(event):
 	# Handle input in the aiming system
@@ -131,7 +193,7 @@ func update_ball_in_grid():
 			if sand_simulation.get_cell(x, y) == Constants.CellType.BALL:
 				sand_simulation.set_cell(x, y, Constants.CellType.EMPTY)
 	
-	# Set the ball's position in the grid
+	# Set the ball's position in the grid (since physics still uses a single cell)
 	var x = int(ball_position.x)
 	var y = int(ball_position.y)
 	sand_simulation.set_cell(x, y, Constants.CellType.BALL)
@@ -297,14 +359,17 @@ func create_explosion(radius):
 		explosion_particles.append(particle)
 
 func _draw():
-	# Draw the ball with current ball type color
-	var x = ball_position.x
-	var y = ball_position.y
-	var rect = Rect2(x * Constants.GRID_SIZE, y * Constants.GRID_SIZE, Constants.GRID_SIZE, Constants.GRID_SIZE)
+	# Draw the larger pixelated rotating ball
+	var world_position = Vector2(
+		ball_position.x * Constants.GRID_SIZE,
+		ball_position.y * Constants.GRID_SIZE
+	)
 	
-	# Use the color from the ball properties
+	# Get ball color
 	var ball_color = ball_properties.get("color", Constants.BALL_COLOR)
-	draw_rect(rect, ball_color, true)
+	
+	# Draw the large rotating ball
+	draw_large_rotating_ball(world_position, ball_color)
 	
 	# Draw aiming line when shooting
 	if aiming_system:
@@ -353,3 +418,58 @@ func _draw():
 					var border_color = particle.color
 					border_color.a *= 0.7
 					draw_rect(pixel_rect, border_color, false, 1.0)
+
+# Draw larger ball made of pixels that rotates as a cohesive unit
+func draw_large_rotating_ball(position, base_color):
+	# Main ball color
+	var main_color = base_color
+	
+	# Create a slightly darker variant for pattern
+	var pattern_color = Color(
+		base_color.r * 0.7,
+		base_color.g * 0.7,
+		base_color.b * 0.7,
+		base_color.a
+	)
+	
+	# Create a lighter variant for highlights
+	var highlight_color = Color(
+		min(1.0, base_color.r * 1.3),
+		min(1.0, base_color.g * 1.3),
+		min(1.0, base_color.b * 1.3),
+		base_color.a
+	)
+	
+	# Center of the ball in world coordinates
+	var center = Vector2(
+		position.x + Constants.GRID_SIZE / 2,
+		position.y + Constants.GRID_SIZE / 2
+	)
+	
+	# Draw each pixel of the large ball
+	for pixel in ball_pixels:
+		# Apply rotation to the pixel offset
+		var rotated_x = pixel.offset.x * cos(ball_rotation) - pixel.offset.y * sin(ball_rotation)
+		var rotated_y = pixel.offset.x * sin(ball_rotation) + pixel.offset.y * cos(ball_rotation)
+		var rotated_offset = Vector2(rotated_x, rotated_y)
+		
+		# Calculate pixel position after rotation
+		var pixel_pos = center + rotated_offset
+		
+		# Determine color based on pattern
+		var pixel_color
+		if pixel.pattern:
+			pixel_color = main_color
+		else:
+			pixel_color = pattern_color
+		
+		# Create a small 3D effect with highlight - top-left quadrant gets highlight
+		var normalized_offset = rotated_offset.normalized()
+		if normalized_offset.x < -0.3 and normalized_offset.y < -0.3:
+			pixel_color = highlight_color
+		
+		# Draw pixel as a rectangle
+		draw_rect(Rect2(
+			pixel_pos - Vector2(pixel.size/2, pixel.size/2),
+			Vector2(pixel.size, pixel.size)
+		), pixel_color, true)
