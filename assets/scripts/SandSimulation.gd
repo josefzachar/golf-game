@@ -96,7 +96,8 @@ func create_cell(type):
 		"velocity": Vector2.ZERO,
 		"color_variation": Vector2.ZERO,  # Using Vector2 for r,g variation
 		"mass": 0.0,
-		"dampening": 0.0
+		"dampening": 0.0,
+		"is_top_dirt": false  # Flag to identify top dirt cells for grass rendering
 	}
 	
 	# Set properties based on type from defaults
@@ -153,6 +154,9 @@ func load_level(level_path):
 	print("Level path: " + current_level_path)
 	initialize_grid()
 	
+	# Update grass state for the entire grid
+	update_top_dirt_cells()
+	
 	var counts = {
 		"sand": 0, "dirt": 0, "stone": 0, "water": 0, "hole": 0, "empty": 0, "other": 0
 	}
@@ -190,8 +194,58 @@ func _on_sand_update():
 	update_sand_physics()
 	update_water_physics()
 	update_dirt_physics()
+	
+	# Update which dirt cells are top cells (for grass)
+	update_top_dirt_cells()
+	
 	emit_signal("grid_updated", grid)
 	queue_redraw()  # Trigger redraw (Godot 4.x)
+
+# Find the top 1-3 cells of dirt for grass rendering (only on exposed dirt)
+func update_top_dirt_cells():
+	# Reset all dirt cells
+	for x in range(Constants.GRID_WIDTH):
+		for y in range(Constants.GRID_HEIGHT):
+			if x < grid.size() and y < grid[x].size() and grid[x][y].type == Constants.CellType.DIRT:
+				grid[x][y].is_top_dirt = false
+	
+	# Find the top exposed dirt cells in each column
+	for x in range(Constants.GRID_WIDTH):
+		# Use the column position for consistent randomization
+		var column_seed = x * 1731 + 947
+		var rand_state = RandomNumberGenerator.new()
+		rand_state.seed = column_seed
+		
+		# Randomly decide how many top dirt cells should be grass (1-3)
+		var max_grass_cells = rand_state.randi_range(1, 3)
+		
+		var found_exposed_dirt = false
+		var grass_cell_count = 0
+		
+		# Scan from top to bottom
+		for y in range(Constants.GRID_HEIGHT):
+			if x < grid.size() and y < grid[x].size():
+				# Current cell is dirt
+				if grid[x][y].type == Constants.CellType.DIRT:
+					# First dirt cell we've found in this column
+					if not found_exposed_dirt:
+						# Check if it's exposed to air (cell above is empty)
+						var is_exposed = false
+						if y > 0 and grid[x][y-1].type == Constants.CellType.EMPTY:
+							is_exposed = true
+						
+						# Only start adding grass if this dirt is exposed
+						if is_exposed:
+							found_exposed_dirt = true
+							grid[x][y].is_top_dirt = true
+							grass_cell_count = 1
+					# Subsequent dirt cells after the first exposed one
+					elif found_exposed_dirt and grass_cell_count < max_grass_cells:
+						grid[x][y].is_top_dirt = true
+						grass_cell_count += 1
+				# If we hit any non-dirt cell after finding exposed dirt, we're done with this column
+				elif found_exposed_dirt:
+					break
 
 func create_sand_crater(position, radius):
 	# Track affected cells to avoid redundant processing
@@ -550,7 +604,10 @@ func _draw():
 		for y in range(Constants.GRID_HEIGHT):
 			if x < grid.size() and y < grid[x].size():  # Add bounds check
 				var cell = grid[x][y]
-				var rect = Rect2(x * Constants.GRID_SIZE, y * Constants.GRID_SIZE, Constants.GRID_SIZE, Constants.GRID_SIZE)
+				var rect = Rect2(
+					Vector2(x * Constants.GRID_SIZE, y * Constants.GRID_SIZE),
+					Vector2(Constants.GRID_SIZE, Constants.GRID_SIZE)
+				)
 				
 				match cell.type:
 					Constants.CellType.EMPTY:
@@ -584,10 +641,16 @@ func _draw():
 						draw_rect(rect, stone_color, true)
 							
 					Constants.CellType.DIRT:
-						# Draw dirt with organic variations
+						# Get the base dirt color with variation
 						var dirt_color = Constants.DIRT_COLOR
 						dirt_color.r += cell.color_variation.x
 						dirt_color.g += cell.color_variation.y
-						draw_rect(rect, dirt_color, true)
 						
-					# Ball is drawn by the Ball node
+						# Modify the color if this is a top dirt cell (for grass)
+						if cell.is_top_dirt:
+							# Make it more green and less red for grass effect
+							dirt_color.r *= 0.7  # Reduce red
+							dirt_color.g *= 1.5  # Increase green
+						
+						# Draw the dirt cell with appropriate color
+						draw_rect(rect, dirt_color, true)
