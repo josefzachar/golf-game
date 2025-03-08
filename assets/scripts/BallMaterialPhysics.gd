@@ -137,41 +137,44 @@ func handle_dirt_collision(impact_force, cell_properties, sand_check_pos):
 	if ball.current_ball_type == Constants.BallType.HEAVY:
 		penetration_factor = ball.ball_properties.get("penetration_factor", 1.0)
 	
-	# Threshold depends on ball type
-	var dirt_threshold = 15.0
+	# For HEAVY ball - same behavior as before
 	if ball.current_ball_type == Constants.BallType.HEAVY:
-		dirt_threshold = 8.0  # Much easier for heavy ball to penetrate dirt
-	
-	# Dirt now requires EXTREMELY high force to dig through - almost exactly like stone
-	if impact_force > dirt_threshold:
-		# Convert dirt to empty only with extreme impacts
-		ball.sand_simulation.set_cell(sand_check_pos.x, sand_check_pos.y, Constants.CellType.EMPTY)
+		# Threshold for penetrating dirt (only for HEAVY ball)
+		var dirt_threshold = 12.0
 		
-		# Very slight slowdown when passing through dirt
-		if ball.current_ball_type == Constants.BallType.HEAVY:
-			ball.ball_velocity *= Constants.MOMENTUM_CONSERVATION * cell_properties.dampening * 0.99
+		# Only heavy ball can dig through dirt with high impact
+		if impact_force > dirt_threshold:
+			# Convert dirt to empty only with extreme impacts
+			ball.sand_simulation.set_cell(sand_check_pos.x, sand_check_pos.y, Constants.CellType.EMPTY)
+			
+			# Significant slowdown when passing through dirt
+			ball.ball_velocity *= Constants.MOMENTUM_CONSERVATION * cell_properties.dampening * 0.85
+			
+			# Create small crater
+			result.create_crater = true
+			result.crater_size = impact_force * 0.01 * Constants.SAND_DISPLACEMENT_FACTOR
 		else:
-			ball.ball_velocity *= Constants.MOMENTUM_CONSERVATION * cell_properties.dampening * 0.98
-		
-		# Create extremely tiny crater
-		result.create_crater = true
-		result.crater_size = impact_force * (0.01 if ball.current_ball_type == Constants.BallType.HEAVY else 0.008) * Constants.SAND_DISPLACEMENT_FACTOR
+			# For less forceful impacts, solid bounce
+			var travel_direction = ball.ball_velocity.normalized()
+			if abs(travel_direction.y) > abs(travel_direction.x):
+				ball.ball_velocity.y = -ball.ball_velocity.y * ball.ball_properties.get("bounce_factor", Constants.BOUNCE_FACTOR) * 1.3 * cell_properties.dampening
+			else:
+				ball.ball_velocity.x = -ball.ball_velocity.x * ball.ball_properties.get("bounce_factor", Constants.BOUNCE_FACTOR) * 1.3 * cell_properties.dampening
+			
+			ball.ball_velocity *= 0.95 * cell_properties.dampening
 	else:
-		# For less forceful impacts, behave almost exactly like stone - solid bounce
+		# For ALL OTHER BALLS - treat dirt exactly like stone (no penetration)
 		if ball.current_ball_type == Constants.BallType.STICKY:
 			# Sticky ball stops when hitting dirt
 			ball.ball_velocity = Vector2.ZERO
 		else:
-			# Standard bouncing behavior
+			# Strong bounce just like stone
 			var travel_direction = ball.ball_velocity.normalized()
 			if abs(travel_direction.y) > abs(travel_direction.x):
-				# Vertical collision - enhanced bounce like a firm surface
 				ball.ball_velocity.y = -ball.ball_velocity.y * ball.ball_properties.get("bounce_factor", Constants.BOUNCE_FACTOR) * 1.3 * cell_properties.dampening
 			else:
-				# Horizontal collision - enhanced bounce
 				ball.ball_velocity.x = -ball.ball_velocity.x * ball.ball_properties.get("bounce_factor", Constants.BOUNCE_FACTOR) * 1.3 * cell_properties.dampening
 			
-			# Even less velocity reduction (more conservation) - behave more like a solid
 			ball.ball_velocity *= 0.95 * cell_properties.dampening
 	
 	return result

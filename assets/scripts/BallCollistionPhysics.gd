@@ -34,12 +34,12 @@ func calculate_new_position():
 	ball.ball_position = new_ball_position
 
 func handle_stone_collisions(new_ball_position):
-	# SPECIAL STONE COLLISION CHECK - do this before any other collision checks
-	# We'll look ahead along our path for stone blocks and treat them as rigid boundaries
+	# SPECIAL COLLISION CHECK for stone and dirt (for non-heavy balls)
+	# We'll look ahead along our path for stone blocks or dirt and treat them as rigid boundaries
 	var path_check_steps = 5  # Check multiple steps along the path
-	var stone_collision = false
-	var stone_normal = Vector2.ZERO
-	var stone_pos = Vector2.ZERO
+	var collision = false
+	var collision_normal = Vector2.ZERO
+	var collision_pos = Vector2.ZERO
 	
 	for step in range(1, path_check_steps + 1):
 		var check_fraction = float(step) / path_check_steps
@@ -47,24 +47,28 @@ func handle_stone_collisions(new_ball_position):
 		check_pos = Vector2(round(check_pos.x), round(check_pos.y))
 		
 		if check_pos.x >= 0 and check_pos.x < Constants.GRID_WIDTH and check_pos.y >= 0 and check_pos.y < Constants.GRID_HEIGHT:
-			if ball.sand_simulation.get_cell(check_pos.x, check_pos.y) == Constants.CellType.STONE:
-				stone_collision = true
-				stone_pos = check_pos
+			var cell_type = ball.sand_simulation.get_cell(check_pos.x, check_pos.y)
+			
+			# For STONE, always treat as rigid boundary
+			# For DIRT, only treat as rigid boundary if NOT a heavy ball
+			if cell_type == Constants.CellType.STONE or (cell_type == Constants.CellType.DIRT and ball.current_ball_type != Constants.BallType.HEAVY):
+				collision = true
+				collision_pos = check_pos
 				
-				# Calculate the normal vector (direction from stone to ball)
+				# Calculate the normal vector (direction from collision to ball)
 				var dir_to_ball = (ball.ball_position - check_pos).normalized()
 				
 				# Determine the primary collision direction
 				if abs(dir_to_ball.x) > abs(dir_to_ball.y):
-					stone_normal = Vector2(sign(dir_to_ball.x), 0)
+					collision_normal = Vector2(sign(dir_to_ball.x), 0)
 				else:
-					stone_normal = Vector2(0, sign(dir_to_ball.y))
+					collision_normal = Vector2(0, sign(dir_to_ball.y))
 				
 				break
 	
-	# If we found a stone collision, handle it like a wall boundary
-	if stone_collision:
-		handle_stone_bounce(stone_normal, stone_pos, new_ball_position)
+	# If we found a collision, handle it like a wall boundary
+	if collision:
+		handle_stone_bounce(collision_normal, collision_pos, new_ball_position)
 		return true
 	
 	return false
@@ -299,11 +303,17 @@ func check_additional_collisions(new_ball_position, create_crater, crater_pos, c
 				handle_stone_direction_collision(check_pos, dir, dir_bounce_factor)
 				return  # Exit immediately for stone collision
 				
+			elif cell_type == Constants.CellType.DIRT:
+				# For non-HEAVY balls, treat dirt exactly like stone
+				if ball.current_ball_type != Constants.BallType.HEAVY:
+					handle_stone_direction_collision(check_pos, dir, dir_bounce_factor)
+					return  # Exit immediately for dirt collision (just like stone)
+				else:
+					# For HEAVY ball, use the existing dirt collision behavior
+					handle_dirt_direction_collision(check_pos, dir, dir_bounce_factor, cell_properties, create_crater)
+				
 			elif cell_type == Constants.CellType.SAND and cell_properties:
 				handle_sand_direction_collision(check_pos, dir, dir_bounce_factor, cell_properties, create_crater)
-				
-			elif cell_type == Constants.CellType.DIRT and cell_properties:
-				handle_dirt_direction_collision(check_pos, dir, dir_bounce_factor, cell_properties, create_crater)
 				
 			elif cell_type == Constants.CellType.WATER and cell_properties:
 				# Apply water resistance based on ball type
@@ -381,39 +391,47 @@ func handle_sand_direction_collision(check_pos, dir, dir_bounce_factor, cell_pro
 		)
 
 func handle_dirt_direction_collision(check_pos, dir, dir_bounce_factor, cell_properties, create_crater):
-	# Similar bounce handling as stone but with different properties
-	if ball.current_ball_type == Constants.BallType.STICKY:
-		# Sticky ball stops when colliding with dirt
-		ball.ball_velocity = Vector2.ZERO
-		
-		# Position appropriately based on collision direction
-		if dir.y > 0:  # Dirt below
-			ball.ball_position.y = check_pos.y - 1
+	# For HEAVY ball, keep existing behavior
+	if ball.current_ball_type == Constants.BallType.HEAVY:
+		handle_sand_direction_collision(check_pos, dir, dir_bounce_factor, cell_properties, create_crater)
 	else:
-		if dir.y < 0:  # Hitting dirt from below
-			ball.ball_velocity.y = -ball.ball_velocity.y * dir_bounce_factor * 1.3 * cell_properties.dampening  # Enhanced bounce
-		elif dir.y > 0 and ball.ball_velocity.y > 0.5:  # Hitting dirt from above
-			# Lower velocity = more solid bounce like stone
-			if ball.ball_velocity.y < 1.5:
-				ball.ball_velocity.y = -ball.ball_velocity.y * dir_bounce_factor * 1.2 * cell_properties.dampening  # More bounce
+		# For all other balls, treat dirt exactly like stone
+		# This function now mirrors handle_stone_direction_collision for non-HEAVY balls
+		
+		# Detect velocity to determine behavior
+		var is_low_velocity = ball.ball_velocity.length() < 1.2
+		
+		if ball.current_ball_type == Constants.BallType.STICKY:
+			# Sticky ball always stops when hitting dirt
+			ball.ball_velocity = Vector2.ZERO
+			
+			# Ensure proper position based on collision direction
+			if dir.y > 0:  # Dirt is below
+				ball.ball_position.y = check_pos.y - 1
+			elif dir.y < 0:  # Dirt is above
+				ball.ball_position.y = check_pos.y + 1
+			elif dir.x != 0:  # Dirt is to the side
+				ball.ball_position.x = check_pos.x - dir.x
+		else:
+			if dir.y > 0:  # Dirt is below
+				if is_low_velocity:
+					# Stop all movement for low velocities to prevent hovering
+					ball.ball_velocity = Vector2.ZERO
+				else:
+					# Allow bounce for regular speeds
+					ball.ball_velocity.y = -ball.ball_velocity.y * dir_bounce_factor * 1.2
+				
+				# Always position above dirt
+				ball.ball_position.y = check_pos.y - 1
 			else:
-				ball.ball_velocity.y *= 0.7 * cell_properties.dampening  # Some absorption at high speeds
-			# Ensure we're above the dirt
-			ball.ball_position.y = check_pos.y - 1
-	
-	# Apply extremely minimal resistance for effortless rolling on dirt
-	if ball.current_ball_type == Constants.BallType.HEAVY:
-		ball.ball_velocity /= (1.0 + (Constants.SAND_RESISTANCE * 0.02 / ball.ball_properties.get("mass", Constants.BALL_MASS)) * 0.1 * (cell_properties.mass / 1.0))
-	else:
-		ball.ball_velocity /= (1.0 + (Constants.SAND_RESISTANCE * 0.05 / ball.ball_properties.get("mass", Constants.BALL_MASS)) * 0.1 * (cell_properties.mass / 1.0))
-	
-	# Create smaller craters than sand and only with high velocity
-	var crater_threshold = 12.0
-	if ball.current_ball_type == Constants.BallType.HEAVY:
-		crater_threshold = 7.0  # Lower threshold for heavy ball
+				# For side or above collisions, use normal bouncing
+				if dir.x != 0:
+					ball.ball_velocity.x = -ball.ball_velocity.x * dir_bounce_factor * 1.2
+				if dir.y < 0:
+					ball.ball_velocity.y = -ball.ball_velocity.y * dir_bounce_factor * 1.2
 		
-	if ball.ball_velocity.length() > crater_threshold and not create_crater:
-		material_physics.create_impact_crater(
-			check_pos, 
-			ball.ball_velocity.length() * (0.02 if ball.current_ball_type == Constants.BallType.HEAVY else 0.01) * Constants.SAND_DISPLACEMENT_FACTOR
-		)
+		# Update position
+		# Place ball at new position
+		var x = int(ball.ball_position.x)
+		var y = int(ball.ball_position.y)
+		ball.sand_simulation.set_cell(x, y, Constants.CellType.BALL)

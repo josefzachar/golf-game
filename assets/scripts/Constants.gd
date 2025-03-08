@@ -20,7 +20,7 @@ const GRAVITY = 50.0
 const BALL_COLOR = Color(1.0, 1.0, 1.0)  # White ball
 const BALL_MASS = 0.75  # Ball mass (higher value = heavier ball)
 const BOUNCE_FACTOR = 0.5  # How bouncy the ball is (0-1) - reduced for less bouncing
-const REST_THRESHOLD = 0.25  # Below this velocity magnitude, the ball will rest on surfaces
+const REST_THRESHOLD = 0.05  # Below this velocity magnitude, the ball will rest on surfaces
 
 # Materials
 enum CellType {
