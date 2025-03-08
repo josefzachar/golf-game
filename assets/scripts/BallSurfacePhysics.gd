@@ -26,10 +26,10 @@ func handle_stone_detection():
 		# Force the ball to rest directly on top of the stone
 		ball.ball_position.y = stone_y_pos - 1  # Position exactly on top of stone
 		
-		# For sticky ball, always stop completely. For other balls, use normal logic
+		# For sticky ball, set to very low velocity instead of zero
+		# This allows shooting while still sticking to the surface
 		if ball.current_ball_type == Constants.BallType.STICKY:
-			ball.ball_velocity.x = 0
-			ball.ball_velocity.y = 0  # Force to absolute zero
+			ball.ball_velocity = Vector2(0, 0.01)  # Very tiny velocity to allow shooting
 		else:
 			ball.ball_velocity = Vector2.ZERO  # Complete stop - no velocity at all
 		
@@ -62,7 +62,9 @@ func handle_dirt_detection():
 		
 		# Different behavior based on ball type
 		if ball.current_ball_type == Constants.BallType.STICKY:
-			ball.ball_velocity = Vector2.ZERO  # Sticky ball stops completely on dirt
+			# For sticky ball, set to very low velocity instead of zero
+			# This allows shooting while still sticking to the surface
+			ball.ball_velocity = Vector2(0, 0.01)  # Very tiny velocity to allow shooting
 		else:
 			# Allow for rolling by preserving horizontal velocity with some friction
 			ball.ball_velocity.y = 0  # Zero vertical velocity
@@ -117,9 +119,9 @@ func handle_stone_surface(check_pos_below):
 	
 	# Different behavior based on ball type
 	if ball.current_ball_type == Constants.BallType.STICKY:
-		# Force velocity to absolute zero to ensure shooting works
+		# Set velocity to very small value instead of zero to allow shooting
 		ball.ball_velocity.x = 0
-		ball.ball_velocity.y = 0
+		ball.ball_velocity.y = 0.01  # Tiny value above zero
 	else:
 		# INCREASED FRICTION: Apply much stronger horizontal friction on stone
 		if abs(ball.ball_velocity.x) > 0.1:
@@ -153,8 +155,9 @@ func handle_dirt_surface(check_pos_below):
 	
 	# Different behavior based on ball type
 	if ball.current_ball_type == Constants.BallType.STICKY:
-		# Sticky ball stops immediately on dirt
-		ball.ball_velocity = Vector2.ZERO
+		# Sticky ball - use very small velocity to allow shooting
+		ball.ball_velocity.x = 0
+		ball.ball_velocity.y = 0.01  # Tiny value above zero
 	else:
 		# Apply moderate friction for nice rolling behavior
 		if abs(ball.ball_velocity.x) > 0.1:
@@ -173,9 +176,9 @@ func handle_dirt_surface(check_pos_below):
 				ball.ball_velocity = Vector2.ZERO
 
 func handle_rest_on_surface(check_pos_below):
-	# For sticky ball, always stop completely
+	# For sticky ball, use very small velocity instead of zero
 	if ball.current_ball_type == Constants.BallType.STICKY:
-		ball.ball_velocity = Vector2.ZERO
+		ball.ball_velocity = Vector2(0, 0.01)  # Very tiny velocity to allow shooting
 	else:
 		# Normal ball can rest at low speeds
 		ball.ball_velocity = Vector2.ZERO

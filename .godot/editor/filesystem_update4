@@ -9,3 +9,8 @@ res://assets/scripts/SandSimulation.gd
 res://assets/scripts/Ball.gd
 res://assets/scripts/BallCollistionPhysics.gd
 res://assets/scripts/BallSurfacePhysics.gd
+res://assets/scripts/BallAiming.gd
+res://assets/scripts/BallSpecialAbilities.gd
+res://assets/scripts/BallMaterialPhysics.gd
+res://assets/scripts/Constants.gd
+res://assets/scripts/BallPhysics.gd

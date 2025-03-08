@@ -3,11 +3,12 @@ extends RefCounted
 
 # Reference to the main ball node
 var ball = null
+var explosion_particles = []  # Store explosion particles for rendering
 
 func _init(ball_reference):
 	ball = ball_reference
 
-# Explosive ball behavior
+# Explosive ball behavior with enhanced pixelated explosion effect
 func explode():
 	if ball.sand_simulation:
 		print("BOOM! Explosive ball detonated!")
@@ -20,8 +21,98 @@ func explode():
 			var crater_size = explosion_radius * randf_range(0.8, 1.2)
 			ball.sand_simulation.create_sand_crater(crater_pos, crater_size)
 		
+		# Trigger visual explosion effect
+		ball.create_explosion(explosion_radius)
+		
 		# Reset to standard ball after explosion
 		ball.call_deferred("switch_ball_type", Constants.BallType.STANDARD)
+		
+# Generate explosion particles for pixelated effect
+func generate_explosion_particles(radius):
+	var base_radius = radius * Constants.GRID_SIZE
+	var particle_count = int(radius * 40)  # More particles for bigger explosion
+	
+	# Create particles in a circular pattern with pixelated offsets
+	for i in range(particle_count):
+		# Random angle and distance from center
+		var angle = randf() * 2 * PI
+		var distance = randf() * base_radius
+		
+		# Create a pixelated grid-aligned position
+		var pixel_size = max(1, Constants.GRID_SIZE / 4)  # Smaller pixels for more detail
+		var raw_pos = Vector2(
+			cos(angle) * distance,
+			sin(angle) * distance
+		)
+		
+		# Quantize to grid for pixelated look
+		var grid_pos = Vector2(
+			round(raw_pos.x / pixel_size) * pixel_size,
+			round(raw_pos.y / pixel_size) * pixel_size
+		)
+		
+		# Calculate particle lifetime and speed
+		var lifetime = randf_range(0.3, 0.8)
+		var speed = distance / lifetime * randf_range(0.8, 1.2)
+		var direction = grid_pos.normalized()
+		
+		# Create color variations - orange/red/yellow for fire effect
+		var r = randf_range(0.8, 1.0)  # Red component
+		var g = randf_range(0.1, 0.7)  # Green component (varies more for fire effect)
+		var b = randf_range(0.0, 0.1)  # Minimal blue
+		var a = randf_range(0.7, 1.0)  # Alpha for glow effect
+		
+		# Create particle data structure
+		var particle = {
+			"position": ball.ball_position * Constants.GRID_SIZE + grid_pos,
+			"velocity": direction * speed,
+			"size": randf_range(1, 3) * pixel_size,
+			"lifetime": lifetime,
+			"max_lifetime": lifetime,
+			"color": Color(r, g, b, a)
+		}
+		
+		explosion_particles.append(particle)
+
+# Draw the explosion effect
+func draw_explosion(canvas):
+	if explosion_particles.empty():
+		# If no particles, disconnect from draw signal
+		if ball.is_connected("draw", Callable(self, "draw_explosion")):
+			ball.disconnect("draw", Callable(self, "draw_explosion"))
+		return
+	
+	# Update and draw all particles
+	var particles_to_remove = []
+	
+	for i in range(explosion_particles.size()):
+		var particle = explosion_particles[i]
+		
+		# Update lifetime
+		particle.lifetime -= 0.02  # Decrease lifetime
+		
+		if particle.lifetime <= 0:
+			particles_to_remove.append(i)
+			continue
+		
+		# Update position based on velocity
+		particle.position += particle.velocity * 0.5
+		
+		# Calculate fade based on lifetime
+		var fade_ratio = particle.lifetime / particle.max_lifetime
+		var color = particle.color
+		color.a = fade_ratio * particle.color.a
+		
+		# Draw pixelated particle (square for pixelated look)
+		var size = particle.size * fade_ratio  # Shrink as it fades
+		canvas.draw_rect(
+			Rect2(particle.position - Vector2(size/2, size/2), Vector2(size, size)),
+			color
+		)
+	
+	# Remove dead particles (in reverse order to avoid index issues)
+	for i in range(particles_to_remove.size() - 1, -1, -1):
+		explosion_particles.remove_at(particles_to_remove[i])
 
 # Teleport ball behavior
 func swap_with_hole():

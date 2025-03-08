@@ -29,17 +29,14 @@ func update():
 		current_mouse_position = ball.get_global_mouse_position()
 
 func handle_input(event):
-	# Only process mouse inputs when the ball can be shot
-	if not ball.can_shoot():
-		return
-		
+	# Process mouse inputs - allow aiming even when ball is moving
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
-				# Start shooting
+				# Start shooting (allow aiming even while moving)
 				start_shooting()
 			elif is_shooting:
-				# End shooting
+				# End shooting (only actually shoot if ball can be shot)
 				end_shooting()
 
 func start_shooting():
@@ -49,11 +46,13 @@ func start_shooting():
 	
 func end_shooting():
 	if is_shooting:
-		# Calculate the force vector from the click position to the current mouse position
-		var force = (click_position - current_mouse_position) * 0.08
-		
-		# Apply the force to the ball
-		ball.ball_velocity = force
+		# Only apply force if the ball can actually be shot
+		if ball.can_shoot():
+			# Calculate the force vector from the click position to the current mouse position
+			var force = (click_position - current_mouse_position) * 0.08
+			
+			# Apply the force to the ball
+			ball.ball_velocity = force
 		
 		# Reset shooting state
 		is_shooting = false
@@ -72,17 +71,23 @@ func draw(canvas):
 		var max_distance = 600.0
 		var power_ratio = min(distance / max_distance, 1.0)
 		
-		# Draw pixelated elements
+		# Set opacity based on whether the ball can be shot
+		var opacity_multiplier = 1.0 if ball.can_shoot() else 0.5
+		
+		# Draw pixelated elements with conditional opacity
 		
 		# 1. Draw drag line (red dotted) - using large pixel dots
-		draw_pixelated_dotted_line(canvas, click_position, current_mouse_position, Color(1, 0, 0, 0.8), 8, 12, 4)
+		var drag_color = Color(1, 0, 0, 0.8 * opacity_multiplier)
+		draw_pixelated_dotted_line(canvas, click_position, current_mouse_position, drag_color, 8, 12, 4)
 		
 		# 2. Draw shot prediction line - matching the dotted style but in white
 		var opposite_end = click_position + shot_direction * distance
-		draw_pixelated_dotted_line(canvas, click_position, opposite_end, Color(1, 1, 1, 0.9), 8, 12, 4)
+		var prediction_color = Color(1, 1, 1, 0.9 * opacity_multiplier)
+		draw_pixelated_dotted_line(canvas, click_position, opposite_end, prediction_color, 8, 12, 4)
 		
 		# 3. Draw pixel-art arrowhead at the end
-		draw_pixelated_arrowhead(canvas, opposite_end, shot_direction, Color(1, 1, 1, 0.8), 8)
+		var arrow_color = Color(1, 1, 1, 0.8 * opacity_multiplier)
+		draw_pixelated_arrowhead(canvas, opposite_end, shot_direction, arrow_color, 8)
 
 # Pixelated drawing functions
 

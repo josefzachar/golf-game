@@ -17,6 +17,12 @@ var aiming_system = null
 var current_ball_type = Constants.BallType.STANDARD
 var ball_properties = null
 
+# Explosion effect variables
+var explosion_particles = []
+var explosion_active = false
+var explosion_timer = 0.0
+var explosion_frames = []  # For storing predefined explosion frame patterns
+
 # Signals
 signal ball_in_hole
 signal ball_type_changed(type)
@@ -45,11 +51,45 @@ func _ready():
 		timer.timeout.connect(func(): update_ball_in_grid())
 		add_child(timer)
 		timer.start()
+	
+	# Initialize explosion frame patterns (pixel art explosion animation)
+	_initialize_explosion_frames()
 
-func _process(_delta):
+func _process(delta):
 	# Update aiming system
 	if aiming_system:
 		aiming_system.update()
+	
+	# Update explosion particles
+	if explosion_active:
+		explosion_timer -= delta
+		if explosion_timer <= 0:
+			explosion_active = false
+			explosion_particles.clear()
+		else:
+			# Update each particle
+			for particle in explosion_particles:
+				# Skip particles that haven't "appeared" yet based on delay
+				if particle.delay > 0:
+					particle.delay -= delta
+					continue
+					
+				particle.pos += particle.vel * delta
+				
+				# Apply pixelated movement (snap to grid occasionally)
+				if randf() > 0.7:
+					var snap_size = Constants.GRID_SIZE / 2
+					particle.pos.x = round(particle.pos.x / snap_size) * snap_size
+					particle.pos.y = round(particle.pos.y / snap_size) * snap_size
+				
+				particle.lifetime -= delta
+				
+				# Fade out particle as lifetime decreases
+				if particle.lifetime < 0.2:
+					particle.color.a = particle.lifetime / 0.2  # Linear fade out
+				
+				if particle.lifetime <= 0:
+					particle.color.a = 0  # Make invisible when lifetime ends
 	
 	# Request redraw for visual updates
 	queue_redraw()
@@ -124,6 +164,7 @@ func switch_ball_type(new_type):
 	
 	print("Switched from " + Constants.BALL_PROPERTIES[old_type].name + " to " + ball_properties.name)
 
+# In Ball.gd, update the can_shoot() function to prevent shooting when surrounded by materials
 func can_shoot():
 	# Don't allow shooting if game is won
 	if main_node and main_node.has_method("get") and main_node.get("game_won"):
@@ -135,6 +176,125 @@ func can_shoot():
 		
 	# Use a higher threshold matching REST_THRESHOLD from Constants.gd
 	return ball_velocity.length() < Constants.REST_THRESHOLD
+
+# Create predefined pixel-art explosion frames
+func _initialize_explosion_frames():
+	# Frame 1: Initial blast (center plus cardinal directions)
+	var frame1 = [
+		Vector2(0, 0),    # Center
+		Vector2(1, 0),    # Right
+		Vector2(-1, 0),   # Left
+		Vector2(0, 1),    # Down
+		Vector2(0, -1)    # Up
+	]
+	
+	# Frame 2: Expanding diamond
+	var frame2 = [
+		Vector2(0, 0),    # Center
+		Vector2(1, 0), Vector2(2, 0),  # Right
+		Vector2(-1, 0), Vector2(-2, 0), # Left
+		Vector2(0, 1), Vector2(0, 2),  # Down
+		Vector2(0, -1), Vector2(0, -2), # Up
+		Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1), Vector2(-1, -1) # Diagonals
+	]
+	
+	# Frame 3: Large pixelated circle/diamond
+	var frame3 = []
+	for x in range(-3, 4):
+		for y in range(-3, 4):
+			if abs(x) + abs(y) <= 4:  # Diamond shape
+				frame3.append(Vector2(x, y))
+	
+	# Frame 4: Expanding with gaps (dispersing)
+	var frame4 = []
+	for x in range(-4, 5):
+		for y in range(-4, 5):
+			if abs(x) + abs(y) <= 6 and (abs(x) % 2 == 0 or abs(y) % 2 == 0):
+				frame4.append(Vector2(x, y))
+	
+	# Store all frames
+	explosion_frames = [frame1, frame2, frame3, frame4]
+
+# Function for creating a pixel-art style explosion
+func create_explosion(radius):
+	# Reset explosion state
+	explosion_particles.clear()
+	explosion_active = true
+	explosion_timer = 1.0  # Slightly longer duration for frame-by-frame effect
+	
+	# Pixel size for chunky pixels
+	var pixel_size = Constants.GRID_SIZE / 2
+	
+	# Use the predefined frame patterns to create a more structured pixel explosion
+	for frame_idx in range(explosion_frames.size()):
+		var frame = explosion_frames[frame_idx]
+		var frame_delay = frame_idx * 0.2  # Each frame appears with delay
+		
+		# Create particles for each position in this frame
+		for pos in frame:
+			# Scale position by radius
+			var scaled_pos = pos * (radius / 3.0) * pixel_size
+			
+			# Determine color based on position and frame
+			var color
+			var dist = pos.length()
+			
+			if frame_idx == 0:
+				# Center explosion - white/yellow
+				color = Color(1.0, 1.0, 0.8, 0.9)
+			elif frame_idx == 1:
+				# Second frame - orange
+				color = Color(1.0, 0.6, 0.1, 0.8)
+			elif dist < 2:
+				# Inner particles - red/orange
+				color = Color(0.9, 0.3, 0.1, 0.8)
+			else:
+				# Outer particles - red to dark red
+				color = Color(
+					0.7 - dist * 0.05,  # Red decreases with distance
+					0.2 - dist * 0.03,  # Green decreases with distance
+					0.05,               # Minimal blue
+					0.7                 # Alpha
+				)
+			
+			# Each pixel has a slight random movement direction away from center
+			var vel_scale = (5 - frame_idx) * 5  # Earlier frames move faster
+			var movement_dir = pos.normalized() + Vector2(randf_range(-0.2, 0.2), randf_range(-0.2, 0.2))
+			
+			# Create the particle
+			var particle = {
+				"pos": scaled_pos,
+				"vel": movement_dir.normalized() * vel_scale,
+				"size": pixel_size * randf_range(0.9, 1.1),  # Slightly varied sizes
+				"color": color,
+				"lifetime": 0.8 - frame_delay,  # Earlier frames last longer
+				"delay": frame_delay  # When this particle appears
+			}
+			
+			explosion_particles.append(particle)
+	
+	# Add some random debris particles
+	for i in range(int(radius * 5)):
+		var angle = randf() * 2 * PI
+		var distance = randf() * radius * pixel_size
+		
+		# Calculate position (aligned to grid for pixel-art look)
+		var pos = Vector2(
+			round(cos(angle) * distance / pixel_size) * pixel_size,
+			round(sin(angle) * distance / pixel_size) * pixel_size
+		)
+		
+		# Add small debris particles with varied movement
+		var particle = {
+			"pos": pos,
+			"vel": pos.normalized() * randf_range(10, 30),
+			"size": pixel_size * randf_range(0.5, 1.0),
+			"color": Color(0.6, 0.3, 0.1, 0.7),
+			"lifetime": randf_range(0.4, 0.8),
+			"delay": randf_range(0, 0.4)  # Random delay for staggered appearance
+		}
+		
+		explosion_particles.append(particle)
 
 func _draw():
 	# Draw the ball with current ball type color
@@ -149,3 +309,47 @@ func _draw():
 	# Draw aiming line when shooting
 	if aiming_system:
 		aiming_system.draw(self)
+	
+	# Draw explosion particles
+	if explosion_active:
+		for particle in explosion_particles:
+			# Skip particles in delay state
+			if particle.delay > 0:
+				continue
+				
+			if particle.color.a > 0:  # Only draw visible particles
+				# Calculate world position
+				var pos = Vector2(
+					ball_position.x * Constants.GRID_SIZE,
+					ball_position.y * Constants.GRID_SIZE
+				) + particle.pos
+				
+				# Round position to grid for crisp pixel-art look
+				pos.x = round(pos.x)
+				pos.y = round(pos.y)
+				
+				# Draw as a perfect square for pixelated look
+				var size = particle.size
+				if particle.lifetime < 0.3:
+					# Make pixels shrink slightly at the end
+					size *= (particle.lifetime / 0.3)
+				
+				# Force size to be an even number for pixel-perfect rendering
+				size = round(size / 2) * 2
+				if size < 2:
+					size = 2  # Minimum size
+				
+				# Create pixel-perfect rectangle
+				var pixel_rect = Rect2(
+					Vector2(pos.x - size/2, pos.y - size/2),
+					Vector2(size, size)
+				)
+				
+				# Draw perfect square
+				draw_rect(pixel_rect, particle.color, true)
+				
+				# For larger particles, add a pixel-art border
+				if size >= 6 and randf() > 0.5:
+					var border_color = particle.color
+					border_color.a *= 0.7
+					draw_rect(pixel_rect, border_color, false, 1.0)
