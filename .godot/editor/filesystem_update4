@@ -14,3 +14,4 @@ res://assets/scripts/BallSpecialAbilities.gd
 res://assets/scripts/BallMaterialPhysics.gd
 res://assets/scripts/Constants.gd
 res://assets/scripts/BallPhysics.gd
+res://assets/scripts/MainMenu.gd

@@ -33,6 +33,9 @@ func _on_play_pressed():
 	level_select.level_selected.connect(_on_level_selected)
 	level_select.back_pressed.connect(func(): _close_screen(level_select))
 	
+	level_select.level_manager.scan_levels()
+	level_select.populate_levels()
+	
 	current_screen = level_select
 
 func _on_level_selected(level_info):

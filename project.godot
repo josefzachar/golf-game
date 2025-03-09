@@ -22,7 +22,6 @@ config/uuid="your-unique-uuid"
 
 Constants="*res://assets/scripts/Constants.gd"
 LevelInit="*res://assets/scripts/LevelInit.gd"
-LevelManager="*res://assets/scripts/LevelManager.gd"
 EditorCell="*res://assets/scripts/EditorCell.gd"
 EditorBrushController="*res://assets/scripts/EditorBrushController.gd"
 EditorPropertyController="*res://assets/scripts/EditorPropertyController.gd"
