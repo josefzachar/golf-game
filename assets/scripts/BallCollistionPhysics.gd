@@ -285,6 +285,8 @@ func handle_material_collisions(new_ball_position):
 			if ball.sand_simulation.get_cell(crater_pos.x, crater_pos.y) != Constants.CellType.STONE:
 				ball.sand_simulation.create_sand_crater(crater_pos, crater_size)
 
+
+
 func check_additional_collisions(new_ball_position, create_crater, crater_pos, crater_size):
 	# This handles cases where the ball moves diagonally or bounces
 	var directions = [Vector2(1, 0), Vector2(-1, 0), Vector2(0, 1), Vector2(0, -1)]

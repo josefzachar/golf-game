@@ -132,6 +132,9 @@ class DirtCollisionResult:
 func handle_dirt_collision(impact_force, cell_properties, sand_check_pos):
 	var result = DirtCollisionResult.new()
 	
+	# Store if this is a grass cell (top dirt)
+	var is_grass = cell_properties.is_top_dirt
+	
 	# Calculate impact force based on velocity, mass, and cell-specific mass
 	var penetration_factor = 1.0
 	if ball.current_ball_type == Constants.BallType.HEAVY:

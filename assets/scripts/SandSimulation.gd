@@ -279,6 +279,11 @@ func create_sand_crater(position, radius):
 			else:
 				impact_dir = Vector2(0, -1)  # Default upward if at exact center
 			
+			# Store the grass state before processing
+			var is_grass = false
+			if cell_type == Constants.CellType.DIRT:
+				is_grass = grid[x][y].is_top_dirt
+				
 			# Handle different materials
 			match cell_type:
 				Constants.CellType.STONE:
@@ -307,54 +312,15 @@ func create_sand_crater(position, radius):
 							if new_x >= 0 and new_x < Constants.GRID_WIDTH and new_y >= 0 and new_y < Constants.GRID_HEIGHT and new_x < grid.size() and new_y < grid[new_x].size():
 								if grid[new_x][new_y].type == Constants.CellType.EMPTY:
 									grid[new_x][new_y] = dirt_properties
+									# Preserve grass state if it was grass
+									if is_grass:
+										grid[new_x][new_y].is_top_dirt = true
 						else:
 							# Just apply velocity without moving the dirt
 							grid[x][y].velocity = impact_dir * impact_force * 0.5
-							
-				Constants.CellType.SAND:
-					# Sand is easily disturbed with varied particle effects
-					var sand_properties = grid[x][y].duplicate()
-					grid[x][y] = create_empty_cell()
-					
-					# Higher chance of creating flying sand particles for more dramatic effect
-					if randf() > 0.3:
-						# Calculate particle direction with some randomness
-						var particle_dir = impact_dir.rotated(randf_range(-0.5, 0.5))
-						var blast_force = impact_force * (1.0 + randf_range(-0.2, 0.3))
-						
-						# Add some upward bias for nicer visual effect
-						particle_dir.y -= randf_range(0.3, 0.8)
-						particle_dir = particle_dir.normalized()
-						
-						# Calculate new position
-						var new_x = int(x + particle_dir.x * blast_force)
-						var new_y = int(y + particle_dir.y * blast_force)
-						
-						# Check bounds and place the sand particle
-						if new_x >= 0 and new_x < Constants.GRID_WIDTH and new_y >= 0 and new_y < Constants.GRID_HEIGHT and new_x < grid.size() and new_y < grid[new_x].size():
-							if grid[new_x][new_y].type == Constants.CellType.EMPTY:
-								grid[new_x][new_y] = sand_properties
-								grid[new_x][new_y].velocity = particle_dir * blast_force * sand_properties.mass * 0.5
-								
-				Constants.CellType.WATER:
-					# Water splashes with impact
-					if impact_force > 1.5 and randf() > 0.5:
-						var water_properties = grid[x][y].duplicate()
-						grid[x][y] = create_empty_cell()
-						
-						# Calculate splash direction with more horizontal spread
-						var splash_dir = impact_dir.rotated(randf_range(-1.2, 1.2))
-						splash_dir.y *= 0.7  # Less vertical movement for water
-						
-						# Calculate new position
-						var new_x = int(x + splash_dir.x * impact_force * 0.8)
-						var new_y = int(y + splash_dir.y * impact_force * 0.8)
-						
-						# Check bounds and place the water particle
-						if new_x >= 0 and new_x < Constants.GRID_WIDTH and new_y >= 0 and new_y < Constants.GRID_HEIGHT and new_x < grid.size() and new_y < grid[new_x].size():
-							if grid[new_x][new_y].type == Constants.CellType.EMPTY:
-								grid[new_x][new_y] = water_properties
-								grid[new_x][new_y].velocity = splash_dir * impact_force * 0.4
+							# Always preserve grass state
+							if is_grass:
+								grid[x][y].is_top_dirt = true
 
 func update_sand_physics():
 	# Process sand in chunks - divide the grid into sections and process one per frame
@@ -582,8 +548,19 @@ func set_cell(x, y, type):
 		if type == Constants.CellType.STONE and grid[x][y].type != Constants.CellType.STONE:
 			return
 		
+		# NEW: Preserve grass state when changing cells
+		var is_grass = false
+		if grid[x][y].type == Constants.CellType.DIRT:
+			is_grass = grid[x][y].is_top_dirt
+		
 		if grid[x][y].type != type:
+			# Create new cell of the specified type
 			grid[x][y] = create_cell(type)
+			
+			# If we're converting to dirt and the cell was previously grass,
+			# preserve the grass appearance
+			if type == Constants.CellType.DIRT and is_grass:
+				grid[x][y].is_top_dirt = true
 
 func get_cell(x, y):
 	if x >= 0 and x < Constants.GRID_WIDTH and y >= 0 and y < Constants.GRID_HEIGHT and x < grid.size() and y < grid[x].size():
