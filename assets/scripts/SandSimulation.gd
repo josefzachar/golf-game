@@ -290,6 +290,32 @@ func create_sand_crater(position, radius):
 					# Stone is completely indestructible
 					continue
 					
+				Constants.CellType.SAND:
+					# SAND - Make sand react more like dirt during explosions
+					# Only move sand with significant force (lower threshold than dirt)
+					if impact_force > 1.5 and randf() > max(0.2, 0.6 - impact_force * 0.15):
+						var sand_properties = grid[x][y].duplicate()
+						
+						# Apply velocity based on impact (slightly higher than dirt)
+						sand_properties.velocity = impact_dir * impact_force * 0.9
+						
+						# Only remove sand with higher force (lower threshold than dirt)
+						if impact_force > 2.0:
+							grid[x][y] = create_empty_cell()
+							
+							# Calculate new position based on impact direction
+							var strength_factor = min(4.0, impact_force * 0.7)  # Stronger displacement than dirt
+							var new_x = int(x + impact_dir.x * strength_factor)
+							var new_y = int(y + impact_dir.y * strength_factor)
+							
+							# Try to place the sand in the impact direction
+							if new_x >= 0 and new_x < Constants.GRID_WIDTH and new_y >= 0 and new_y < Constants.GRID_HEIGHT and new_x < grid.size() and new_y < grid[new_x].size():
+								if grid[new_x][new_y].type == Constants.CellType.EMPTY:
+									grid[new_x][new_y] = sand_properties
+						else:
+							# Just apply velocity without moving the sand
+							grid[x][y].velocity = impact_dir * impact_force * 0.7
+					
 				Constants.CellType.DIRT:
 					# DIRT - Tunneling material that only responds to impacts
 					# Only move dirt with significant force

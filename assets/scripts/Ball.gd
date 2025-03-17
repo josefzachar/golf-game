@@ -210,12 +210,8 @@ func switch_ball_type(new_type):
 	current_ball_type = new_type
 	update_ball_properties()
 	
-	# Special behavior for explosive ball - explode when switched to
-	if new_type == Constants.BallType.EXPLOSIVE:
-		special_abilities.explode()
-	
 	# Special behavior for teleport ball - swap with hole when switched to
-	elif new_type == Constants.BallType.TELEPORT:
+	if new_type == Constants.BallType.TELEPORT:
 		special_abilities.swap_with_hole()
 	
 	# Update the ball in the grid to show the new color

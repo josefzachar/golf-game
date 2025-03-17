@@ -12,13 +12,14 @@ func _init(ball_reference):
 func explode():
 	if ball.sand_simulation:
 		print("BOOM! Explosive ball detonated!")
-		var explosion_radius = ball.ball_properties.get("explosion_radius", 5.0)
+		# Increase explosion radius for a bigger explosion
+		var explosion_radius = ball.ball_properties.get("explosion_radius", 8.0)  # Increased from 5.0 to 8.0
 		
-		# Create multiple craters for a bigger explosion effect
-		for i in range(3):
-			var offset = Vector2(randf_range(-2, 2), randf_range(-2, 2))
+		# Create more craters for a bigger explosion effect
+		for i in range(5):  # Increased from 3 to 5 craters
+			var offset = Vector2(randf_range(-3, 3), randf_range(-3, 3))  # Increased offset range
 			var crater_pos = ball.ball_position + offset
-			var crater_size = explosion_radius * randf_range(0.8, 1.2)
+			var crater_size = explosion_radius * randf_range(1.0, 1.5)  # Increased size multiplier
 			ball.sand_simulation.create_sand_crater(crater_pos, crater_size)
 		
 		# Trigger visual explosion effect

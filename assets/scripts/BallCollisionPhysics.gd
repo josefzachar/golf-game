@@ -74,6 +74,12 @@ func handle_stone_collisions(new_ball_position):
 	return false
 
 func handle_stone_bounce(stone_normal, stone_pos, new_ball_position):
+	# Check if this is an explosive ball collision
+	if ball.current_ball_type == Constants.BallType.EXPLOSIVE:
+		# Trigger explosion on collision with stone
+		ball.special_abilities.explode()
+		return
+		
 	# Get bounce properties based on velocity and ball type
 	var bounce_factor = ball.ball_properties.get("bounce_factor", Constants.BOUNCE_FACTOR)
 	
@@ -138,6 +144,8 @@ func handle_stone_bounce(stone_normal, stone_pos, new_ball_position):
 
 func handle_boundary_collisions(new_ball_position):
 	var bounced = false
+	
+	# Note: Explosive ball no longer explodes on boundary collision
 	
 	# Get bounce factor based on ball type
 	var bounce_factor = ball.ball_properties.get("bounce_factor", Constants.BOUNCE_FACTOR)
@@ -272,6 +280,12 @@ func handle_material_collisions(new_ball_position):
 				crater_size = dirt_result.crater_size
 				
 		elif cell_type == Constants.CellType.WATER and cell_properties:
+			# Check if this is an explosive ball collision with water
+			if ball.current_ball_type == Constants.BallType.EXPLOSIVE:
+				# Trigger explosion on collision with water
+				ball.special_abilities.explode()
+				return
+			
 			# Apply water resistance via material physics
 			material_physics.apply_water_resistance(cell_properties)
 	
@@ -318,11 +332,24 @@ func check_additional_collisions(new_ball_position, create_crater, crater_pos, c
 				handle_sand_direction_collision(check_pos, dir, dir_bounce_factor, cell_properties, create_crater)
 				
 			elif cell_type == Constants.CellType.WATER and cell_properties:
+				# Check if this is an explosive ball collision with water
+				if ball.current_ball_type == Constants.BallType.EXPLOSIVE:
+					# Trigger explosion on collision with water
+					ball.special_abilities.explode()
+					return
+					
 				# Apply water resistance based on ball type
 				material_physics.apply_water_resistance(cell_properties)
 
 func handle_stone_direction_collision(check_pos, dir, dir_bounce_factor):
 	# This is a failsafe in case stone was missed in earlier detection
+	
+	# Check if this is an explosive ball collision with stone
+	if ball.current_ball_type == Constants.BallType.EXPLOSIVE:
+		# Trigger explosion on collision with stone
+		ball.special_abilities.explode()
+		return
+	
 	# Detect velocity to determine behavior
 	var is_low_velocity = ball.ball_velocity.length() < 1.2
 	
@@ -362,6 +389,12 @@ func handle_stone_direction_collision(check_pos, dir, dir_bounce_factor):
 	ball.sand_simulation.set_cell(x, y, Constants.CellType.BALL)
 
 func handle_sand_direction_collision(check_pos, dir, dir_bounce_factor, cell_properties, create_crater):
+	# Check if this is an explosive ball collision with sand
+	if ball.current_ball_type == Constants.BallType.EXPLOSIVE:
+		# Trigger explosion on collision with sand
+		ball.special_abilities.explode()
+		return
+		
 	# Only create strong bounces for side or bottom collisions, not for top
 	if ball.current_ball_type == Constants.BallType.STICKY:
 		# Sticky ball stops when colliding with sand
@@ -393,6 +426,12 @@ func handle_sand_direction_collision(check_pos, dir, dir_bounce_factor, cell_pro
 		)
 
 func handle_dirt_direction_collision(check_pos, dir, dir_bounce_factor, cell_properties, create_crater):
+	# Check if this is an explosive ball collision with dirt
+	if ball.current_ball_type == Constants.BallType.EXPLOSIVE:
+		# Trigger explosion on collision with dirt
+		ball.special_abilities.explode()
+		return
+		
 	# For HEAVY ball, keep existing behavior
 	if ball.current_ball_type == Constants.BallType.HEAVY:
 		handle_sand_direction_collision(check_pos, dir, dir_bounce_factor, cell_properties, create_crater)
