@@ -9,11 +9,11 @@ var current_level_path = ""  # Path to the current level
 signal grid_updated(grid)
 
 func _ready():
-	# Set up the timer for sand simulation
+	# Set up the timer for physics simulation
 	var timer = Timer.new()
 	timer.wait_time = 0.02  # 20 updates per second
 	timer.autostart = true
-	timer.timeout.connect(_on_sand_update)  # Godot 4.x signal syntax
+	timer.timeout.connect(_on_simulation_update)  # Godot 4.x signal syntax
 	add_child(timer)
 	
 	# Initialize the grid
@@ -104,13 +104,13 @@ func create_cell(type):
 	if Constants.CELL_DEFAULTS.has(type):
 		var defaults = Constants.CELL_DEFAULTS[type]
 		
+		# Copy all properties from defaults
+		for key in defaults:
+			cell[key] = defaults[key]
+		
 		# Add random variations to make each cell unique
-		cell.mass = defaults.mass
 		if type != Constants.CellType.EMPTY and type != Constants.CellType.HOLE:
 			cell.mass += randf_range(-Constants.MASS_VARIATION_RANGE, Constants.MASS_VARIATION_RANGE)
-			
-		cell.dampening = defaults.dampening
-		if type != Constants.CellType.EMPTY and type != Constants.CellType.HOLE:
 			cell.dampening += randf_range(-Constants.DAMPENING_VARIATION_RANGE, Constants.DAMPENING_VARIATION_RANGE)
 			
 		# Add color variation (except for special types)
@@ -128,6 +128,9 @@ func create_cell(type):
 				Constants.CellType.STONE:
 					var gray_var = variation * 0.7
 					cell.color_variation = Vector2(gray_var, gray_var)
+				Constants.CellType.FIRE:
+					# Fire uses a float for color variation
+					cell.color_variation = variation * 0.3
 	
 	return cell
 
@@ -185,21 +188,258 @@ func load_level(level_path):
 	
 	return hole_position  # Return hole position for ball placement
 
-func _on_sand_update():
-	# Skip sand updates if the game is won
+func _on_simulation_update():
+	# Skip updates if the game is won
 	var parent = get_parent()
 	if parent and parent.has_method("get") and parent.get("game_won"):
 		return
 		
-	update_sand_physics()
-	update_water_physics()
-	update_dirt_physics()
+	# Update all materials based on their material type
+	update_physics()
 	
 	# Update which dirt cells are top cells (for grass)
 	update_top_dirt_cells()
 	
 	emit_signal("grid_updated", grid)
 	queue_redraw()  # Trigger redraw (Godot 4.x)
+
+# Universal physics update function that handles all material types
+func update_physics():
+	# Process cells from bottom to top, right to left
+	for y in range(Constants.GRID_HEIGHT - 2, 0, -1):
+		for x in range(Constants.GRID_WIDTH - 1, 0, -1):
+			# Skip out-of-bounds cells
+			if x >= grid.size() or y >= grid[x].size():
+				continue
+				
+			var cell = grid[x][y]
+			var cell_type = cell.type
+			
+			# Skip empty cells and special types
+			if cell_type == Constants.CellType.EMPTY or cell_type == Constants.CellType.HOLE or cell_type == Constants.CellType.BALL:
+				continue
+				
+			# Get material type
+			var material_type = Constants.MaterialType.NONE
+			if cell.has("material_type"):
+				material_type = cell.material_type
+			elif Constants.MATERIAL_CATEGORIES.has(cell_type):
+				material_type = Constants.MATERIAL_CATEGORIES[cell_type]
+			
+			# Process based on material type
+			match material_type:
+				Constants.MaterialType.LIQUID:
+					update_liquid_cell(x, y, cell)
+				Constants.MaterialType.GRANULAR:
+					update_granular_cell(x, y, cell)
+				Constants.MaterialType.SOLID:
+					# Solids don't move on their own
+					pass
+
+# Update a liquid cell (water, lava, fire, etc.)
+func update_liquid_cell(x, y, cell):
+	# Special handling for fire cells
+	if cell.type == Constants.CellType.FIRE:
+		update_fire_cell(x, y, cell)
+		return
+	
+	# Apply gravity to velocity based on cell mass and density
+	cell.velocity.y += Constants.GRAVITY * 0.005 * cell.mass * cell.density
+	
+	# Check if space below is empty and within bounds
+	if y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.EMPTY:
+		grid[x][y + 1] = cell
+		grid[x][y] = create_empty_cell()
+		return
+	
+	# Check if diagonal down-right is empty, using flow_rate to affect probability
+	if x + 1 < grid.size() and y + 1 < grid[x + 1].size() and randf() > (0.1 + (1.0 - cell.flow_rate) * 0.2) and grid[x + 1][y + 1].type == Constants.CellType.EMPTY:
+		grid[x + 1][y + 1] = cell
+		grid[x][y] = create_empty_cell()
+		return
+	
+	# Check if diagonal down-left is empty, using flow_rate to affect probability
+	if x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and randf() > (0.1 + (1.0 - cell.flow_rate) * 0.2) and grid[x - 1][y + 1].type == Constants.CellType.EMPTY:
+		grid[x - 1][y + 1] = cell
+		grid[x][y] = create_empty_cell()
+		return
+	
+	# Horizontal flow based on flow_rate
+	var horizontal_flow_chance = cell.flow_rate * 0.8
+	
+	# Check horizontal flow right if there's liquid behind
+	if x + 1 < grid.size() and randf() > (1.0 - horizontal_flow_chance) and grid[x + 1][y].type == Constants.CellType.EMPTY and \
+		 x - 1 >= 0 and x - 1 < grid.size() and is_liquid(grid[x - 1][y]) and \
+		 x - 2 >= 0 and x - 2 < grid.size() and is_liquid(grid[x - 2][y]):
+		grid[x + 1][y] = cell
+		grid[x][y] = create_empty_cell()
+		return
+	
+	# Check horizontal flow left if there's liquid behind
+	if x - 1 >= 0 and x - 1 < grid.size() and randf() > (1.0 - horizontal_flow_chance) and grid[x - 1][y].type == Constants.CellType.EMPTY and \
+		 x + 1 < grid.size() and is_liquid(grid[x + 1][y]) and \
+		 x + 2 < grid.size() and is_liquid(grid[x + 2][y]):
+		grid[x - 1][y] = cell
+		grid[x][y] = create_empty_cell()
+		return
+	
+	# Apply dampening to velocity based on viscosity
+	cell.velocity *= (cell.dampening * (1.0 - cell.viscosity * 0.5))
+
+# Update a fire cell - special behavior for fire
+func update_fire_cell(x, y, cell):
+	# Decrease lifetime
+	if not cell.has("lifetime"):
+		cell.lifetime = 2.0
+	
+	cell.lifetime -= 0.05
+	
+	# If lifetime is up, remove the fire
+	if cell.lifetime <= 0:
+		grid[x][y] = create_empty_cell()
+		return
+	
+	# Update color based on lifetime (gets more red/yellow as it burns out)
+	var life_ratio = cell.lifetime / 2.0  # Assuming 2.0 is the max lifetime
+	var base_color = Constants.FIRE_COLOR
+	
+	# Shift color from orange to red as it burns out
+	cell.base_color = Color(
+		base_color.r,
+		base_color.g * life_ratio,
+		base_color.b * (life_ratio * 0.5),
+		base_color.a * life_ratio
+	)
+	
+	# Fire rises upward
+	if y > 0 and grid[x][y-1].type == Constants.CellType.EMPTY and randf() < 0.7:
+		grid[x][y-1] = cell
+		grid[x][y] = create_empty_cell()
+		return
+	
+	# Fire can also spread diagonally upward
+	if randf() < 0.3:
+		var spread_dir = 1 if randf() < 0.5 else -1
+		if x + spread_dir >= 0 and x + spread_dir < grid.size() and y > 0 and grid[x + spread_dir][y-1].type == Constants.CellType.EMPTY:
+			grid[x + spread_dir][y-1] = cell
+			grid[x][y] = create_empty_cell()
+			return
+	
+	# Fire can spread horizontally
+	if randf() < 0.2:
+		var spread_dir = 1 if randf() < 0.5 else -1
+		if x + spread_dir >= 0 and x + spread_dir < grid.size() and grid[x + spread_dir][y].type == Constants.CellType.EMPTY:
+			grid[x + spread_dir][y] = cell
+			grid[x][y] = create_empty_cell()
+			return
+	
+	# Random chance to create a new fire cell nearby (spreading the fire)
+	if randf() < cell.spread_chance * life_ratio:
+		var spread_x = x + (randi() % 3 - 1)  # -1, 0, or 1
+		var spread_y = y + (randi() % 2 - 1)  # -1, 0
+		
+		if spread_x >= 0 and spread_x < grid.size() and spread_y >= 0 and spread_y < grid[spread_x].size():
+			if grid[spread_x][spread_y].type == Constants.CellType.EMPTY:
+				var new_fire = create_cell(Constants.CellType.FIRE)
+				new_fire.lifetime = cell.lifetime * 0.8  # Shorter lifetime for spread fire
+				grid[spread_x][spread_y] = new_fire
+
+# Update a granular cell (sand, dirt, etc.)
+func update_granular_cell(x, y, cell):
+	# Check if this is a stable material that only moves when disturbed
+	var is_stable_material = cell.type == Constants.CellType.DIRT
+	var cell_in_motion = cell.velocity.length_squared() > 0.01
+	
+	# If it's a stable material and not in motion, skip physics
+	if is_stable_material and not cell_in_motion:
+		return
+	
+	# Apply gravity to velocity based on cell mass and density
+	var gravity_factor = 0.01
+	if cell.has("flow_rate"):
+		gravity_factor *= cell.flow_rate * 2.0  # Faster falling for higher flow rate
+	
+	cell.velocity.y += Constants.GRAVITY * gravity_factor * cell.mass * cell.density
+	
+	# Fast path for most common case - falling straight down
+	if y + 1 < grid[x].size():
+		var below_type = grid[x][y + 1].type
+		
+		# Check if space below is empty
+		if below_type == Constants.CellType.EMPTY:
+			grid[x][y + 1] = cell
+			grid[x][y] = create_empty_cell()
+			return
+		
+		# Check if space below is liquid - granular materials sink in liquids
+		elif is_liquid(grid[x][y + 1]):
+			var liquid_cell = grid[x][y + 1]
+			grid[x][y] = liquid_cell  # Replace granular with liquid
+			grid[x][y + 1] = cell     # Granular sinks
+			return
+		
+		# If blocked below, try diagonal paths based on flow_rate
+		var diagonal_chance = 0.5
+		if cell.has("flow_rate"):
+			diagonal_chance = cell.flow_rate
+		
+		# Check both diagonals at once for efficiency
+		var can_move_right = x + 1 < grid.size() and y + 1 < grid[x + 1].size() and grid[x + 1][y + 1].type == Constants.CellType.EMPTY
+		var can_move_left = x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and grid[x - 1][y + 1].type == Constants.CellType.EMPTY
+		
+		if can_move_right and can_move_left:
+			# If both diagonals are available, randomly choose one
+			if randf() > 0.5:
+				grid[x + 1][y + 1] = cell
+				grid[x][y] = create_empty_cell()
+			else:
+				grid[x - 1][y + 1] = cell
+				grid[x][y] = create_empty_cell()
+			return
+		elif can_move_right and randf() < diagonal_chance:
+			grid[x + 1][y + 1] = cell
+			grid[x][y] = create_empty_cell()
+			return
+		elif can_move_left and randf() < diagonal_chance:
+			grid[x - 1][y + 1] = cell
+			grid[x][y] = create_empty_cell()
+			return
+		
+		# Additional random spread for natural flow - only do for a small percentage
+		# Higher flow_rate increases chance of extended movement
+		var extended_flow_chance = 0.1
+		if cell.has("flow_rate"):
+			extended_flow_chance = 0.1 * cell.flow_rate
+		
+		if randf() > (1.0 - extended_flow_chance):
+			# Only check extended diagonals if we have neighbors of same type
+			var has_right_neighbor = x + 1 < grid.size() and y < grid[x + 1].size() and grid[x + 1][y].type == cell.type
+			var has_left_neighbor = x - 1 >= 0 and x - 1 < grid.size() and y < grid[x - 1].size() and grid[x - 1][y].type == cell.type
+			
+			if has_right_neighbor and x + 2 < grid.size() and y + 1 < grid[x + 2].size() and grid[x + 2][y + 1].type == Constants.CellType.EMPTY:
+				grid[x + 2][y + 1] = cell
+				grid[x][y] = create_empty_cell()
+				return
+			
+			if has_left_neighbor and x - 2 >= 0 and x - 2 < grid.size() and y + 1 < grid[x - 2].size() and grid[x - 2][y + 1].type == Constants.CellType.EMPTY:
+				grid[x - 2][y + 1] = cell
+				grid[x][y] = create_empty_cell()
+				return
+	
+	# Apply dampening to velocity
+	cell.velocity *= cell.dampening
+	
+	# If velocity is very small, stop the motion completely
+	if cell.velocity.length_squared() < 0.01:
+		cell.velocity = Vector2.ZERO
+
+# Helper function to check if a cell is a liquid
+func is_liquid(cell):
+	if cell.has("material_type"):
+		return cell.material_type == Constants.MaterialType.LIQUID
+	elif Constants.MATERIAL_CATEGORIES.has(cell.type):
+		return Constants.MATERIAL_CATEGORIES[cell.type] == Constants.MaterialType.LIQUID
+	return false
 
 # Find the top 1-3 cells of dirt for grass rendering (only on exposed dirt)
 func update_top_dirt_cells():
@@ -247,7 +487,7 @@ func update_top_dirt_cells():
 				elif found_exposed_dirt:
 					break
 
-func create_sand_crater(position, radius):
+func create_impact_crater(position, radius):
 	# Track affected cells to avoid redundant processing
 	var processed_cells = {}
 	
@@ -270,8 +510,11 @@ func create_sand_crater(position, radius):
 			# Mark as processed
 			processed_cells[cell_key] = true
 			
+			# Get the cell and its properties
+			var cell = grid[x][y]
+			var cell_type = cell.type
+			
 			# Calculate impact properties
-			var cell_type = grid[x][y].type
 			var impact_force = radius * (1.0 - distance / radius)
 			var impact_dir = Vector2(x, y) - position
 			if impact_dir.length() > 0:
@@ -282,206 +525,100 @@ func create_sand_crater(position, radius):
 			# Store the grass state before processing
 			var is_grass = false
 			if cell_type == Constants.CellType.DIRT:
-				is_grass = grid[x][y].is_top_dirt
-				
-			# Handle different materials
-			match cell_type:
-				Constants.CellType.STONE:
-					# Stone is completely indestructible
-					continue
+				is_grass = cell.is_top_dirt
+			
+			# Get material type
+			var material_type = Constants.MaterialType.NONE
+			if cell.has("material_type"):
+				material_type = cell.material_type
+			elif Constants.MATERIAL_CATEGORIES.has(cell_type):
+				material_type = Constants.MATERIAL_CATEGORIES[cell_type]
+			
+			# Skip processing for NONE material type
+			if material_type == Constants.MaterialType.NONE:
+				continue
+			
+			# Get material strength and displacement properties
+			var strength = 0.5  # Default strength
+			var displacement = 0.5  # Default displacement
+			
+			if cell.has("strength"):
+				strength = cell.strength
+			
+			if cell.has("displacement"):
+				displacement = cell.displacement
+			
+			# Calculate resistance threshold based on material strength
+			var resistance_threshold = 1.5 + (strength * 3.0)
+			
+			# Calculate displacement factor based on material displacement property
+			var displacement_factor = 0.5 + (displacement * 3.0)
+			
+			# Process based on material type
+			match material_type:
+				Constants.MaterialType.SOLID:
+					# Solids are very resistant to impacts
+					if strength < 0.8:  # Only non-stone solids can be affected
+						if impact_force > resistance_threshold * 1.5:
+							# Even strong impacts only apply velocity to solid materials
+							grid[x][y].velocity = impact_dir * impact_force * 0.3
 					
-				Constants.CellType.SAND:
-					# SAND - Make sand react more like dirt during explosions
-					# Only move sand with significant force (lower threshold than dirt)
-					if impact_force > 1.5 and randf() > max(0.2, 0.6 - impact_force * 0.15):
-						var sand_properties = grid[x][y].duplicate()
+				Constants.MaterialType.GRANULAR:
+					# Granular materials (sand, dirt) can be moved by impacts
+					if impact_force > resistance_threshold and randf() > max(0.2, 0.6 - impact_force * 0.15):
+						var cell_properties = cell.duplicate()
 						
-						# Apply velocity based on impact (slightly higher than dirt)
-						sand_properties.velocity = impact_dir * impact_force * 0.9
+						# Apply velocity based on impact and material properties
+						var velocity_factor = 0.8 - (strength * 0.3)
+						cell_properties.velocity = impact_dir * impact_force * velocity_factor
 						
-						# Only remove sand with higher force (lower threshold than dirt)
-						if impact_force > 2.0:
+						# Only remove material with higher force
+						if impact_force > resistance_threshold * 1.3:
 							grid[x][y] = create_empty_cell()
 							
-							# Calculate new position based on impact direction
-							var strength_factor = min(4.0, impact_force * 0.7)  # Stronger displacement than dirt
+							# Calculate new position based on impact direction and displacement
+							var strength_factor = min(4.0, impact_force * displacement_factor)
 							var new_x = int(x + impact_dir.x * strength_factor)
 							var new_y = int(y + impact_dir.y * strength_factor)
 							
-							# Try to place the sand in the impact direction
+							# Try to place the material in the impact direction
 							if new_x >= 0 and new_x < Constants.GRID_WIDTH and new_y >= 0 and new_y < Constants.GRID_HEIGHT and new_x < grid.size() and new_y < grid[new_x].size():
 								if grid[new_x][new_y].type == Constants.CellType.EMPTY:
-									grid[new_x][new_y] = sand_properties
-						else:
-							# Just apply velocity without moving the sand
-							grid[x][y].velocity = impact_dir * impact_force * 0.7
-					
-				Constants.CellType.DIRT:
-					# DIRT - Tunneling material that only responds to impacts
-					# Only move dirt with significant force
-					if impact_force > 2.0 and randf() > max(0.3, 0.7 - impact_force * 0.1):
-						var dirt_properties = grid[x][y].duplicate()
-						
-						# Apply velocity based on impact
-						dirt_properties.velocity = impact_dir * impact_force * 0.75
-						
-						# Only remove dirt with higher force
-						if impact_force > 3.0:
-							grid[x][y] = create_empty_cell()
-							
-							# Calculate new position based on impact direction
-							var strength_factor = min(3.0, impact_force * 0.5)
-							var new_x = int(x + impact_dir.x * strength_factor)
-							var new_y = int(y + impact_dir.y * strength_factor)
-							
-							# Try to place the dirt in the impact direction
-							if new_x >= 0 and new_x < Constants.GRID_WIDTH and new_y >= 0 and new_y < Constants.GRID_HEIGHT and new_x < grid.size() and new_y < grid[new_x].size():
-								if grid[new_x][new_y].type == Constants.CellType.EMPTY:
-									grid[new_x][new_y] = dirt_properties
-									# Preserve grass state if it was grass
-									if is_grass:
+									grid[new_x][new_y] = cell_properties
+									# Preserve grass state if it was dirt and had grass
+									if is_grass and cell_type == Constants.CellType.DIRT:
 										grid[new_x][new_y].is_top_dirt = true
 						else:
-							# Just apply velocity without moving the dirt
-							grid[x][y].velocity = impact_dir * impact_force * 0.5
-							# Always preserve grass state
-							if is_grass:
+							# Just apply velocity without moving the material
+							grid[x][y].velocity = impact_dir * impact_force * velocity_factor
+							# Preserve grass state
+							if is_grass and cell_type == Constants.CellType.DIRT:
 								grid[x][y].is_top_dirt = true
-
-func update_sand_physics():
-	# Process sand in chunks - divide the grid into sections and process one per frame
-	var start_y = (Engine.get_frames_drawn() % 3) * (Constants.GRID_HEIGHT / 3)
-	var end_y = start_y + (Constants.GRID_HEIGHT / 3)
-	
-	# Update from bottom to top, right to left
-	for y in range(min(int(end_y), Constants.GRID_HEIGHT - 2), max(int(start_y), 0), -1):
-		for x in range(Constants.GRID_WIDTH - 1, 0, -1):
-			# Skip cells that don't need processing
-			if x >= grid.size() or y >= grid[x].size() or grid[x][y].type != Constants.CellType.SAND:
-				continue
 				
-			var cell = grid[x][y]
-			
-			# Apply gravity to velocity based on cell mass
-			cell.velocity.y += Constants.GRAVITY * 0.01 * cell.mass
-			
-			# Fast path for most common case - falling straight down
-			if y + 1 < grid[x].size():
-				var below_type = grid[x][y + 1].type
-				
-				# Check if space below is empty - SAND FALLS QUICKLY
-				if below_type == Constants.CellType.EMPTY:
-					# Sand always falls straight down through empty space
-					grid[x][y + 1] = cell
-					grid[x][y] = create_empty_cell()
-					continue
-				
-				# Check if space below is water - sand sinks in water
-				elif below_type == Constants.CellType.WATER:
-					var water_cell = grid[x][y + 1]
-					grid[x][y] = water_cell  # Replace sand with water
-					grid[x][y + 1] = cell    # Sand sinks
-					continue
-				
-				# If blocked below, try diagonal paths - check both at once for efficiency
-				var can_move_right = x + 1 < grid.size() and y + 1 < grid[x + 1].size() and grid[x + 1][y + 1].type == Constants.CellType.EMPTY
-				var can_move_left = x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and grid[x - 1][y + 1].type == Constants.CellType.EMPTY
-				
-				if can_move_right and can_move_left:
-					# If both diagonals are available, randomly choose one with bias based on neighbors
-					if randf() > 0.5:
-						grid[x + 1][y + 1] = cell
-						grid[x][y] = create_empty_cell()
-					else:
-						grid[x - 1][y + 1] = cell
-						grid[x][y] = create_empty_cell()
-					continue
-				elif can_move_right:
-					grid[x + 1][y + 1] = cell
-					grid[x][y] = create_empty_cell()
-					continue
-				elif can_move_left:
-					grid[x - 1][y + 1] = cell
-					grid[x][y] = create_empty_cell()
-					continue
-				
-				# Additional random spread for natural sand flow - only do for a small percentage
-				elif randf() > 0.9:  # Reduced from 0.7 to 0.9 (only 10% chance now)
-					# Only check extended diagonals if we have sand neighbors
-					var has_right_neighbor = x + 1 < grid.size() and y < grid[x + 1].size() and grid[x + 1][y].type == Constants.CellType.SAND
-					var has_left_neighbor = x - 1 >= 0 and x - 1 < grid.size() and y < grid[x - 1].size() and grid[x - 1][y].type == Constants.CellType.SAND
-					
-					if has_right_neighbor and x + 2 < grid.size() and y + 1 < grid[x + 2].size() and grid[x + 2][y + 1].type == Constants.CellType.EMPTY:
-						grid[x + 2][y + 1] = cell
-						grid[x][y] = create_empty_cell()
-						continue
-					
-					if has_left_neighbor and x - 2 >= 0 and x - 2 < grid.size() and y + 1 < grid[x - 2].size() and grid[x - 2][y + 1].type == Constants.CellType.EMPTY:
-						grid[x - 2][y + 1] = cell
-						grid[x][y] = create_empty_cell()
-						continue
-			
-			# Apply dampening to velocity
-			cell.velocity *= cell.dampening
-
-func update_dirt_physics():
-	# For dirt, we'll only update cells that have been recently impacted
-	# This allows dirt to form stable tunnels and structures
-	
-	for y in range(Constants.GRID_HEIGHT - 2, 0, -1):
-		for x in range(Constants.GRID_WIDTH - 1, 0, -1):
-			# Skip cells that don't need processing
-			if x >= grid.size() or y >= grid[x].size() or grid[x][y].type != Constants.CellType.DIRT:
-				continue
-			
-			var cell = grid[x][y]
-			
-			# If this dirt cell has velocity, it's already in motion from an impact
-			var cell_in_motion = cell.velocity.length_squared() > 0.01
-			
-			# If dirt is not in motion, skip all physics (stays suspended in air)
-			if not cell_in_motion:
-				continue
-			
-			# For dirt in motion, apply similar physics to sand but with more cohesion
-			# Apply gravity to velocity based on cell mass
-			cell.velocity.y += Constants.GRAVITY * 0.01 * cell.mass
-			
-			# Check if space below is empty and we're moving
-			if y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.EMPTY:
-				grid[x][y + 1] = cell
-				grid[x][y] = create_empty_cell()
-				continue
-			
-			# Check if space below is water - dirt sinks in water
-			elif y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.WATER:
-				var water_cell = grid[x][y + 1]
-				grid[x][y] = water_cell  # Replace dirt with water
-				grid[x][y + 1] = cell  # Dirt sinks
-				continue
-			
-			# Only allow diagonal movement for dirt in motion with reduced probability
-			var diagonal_probability = 0.3  # 30% chance to move diagonally when in motion
-			
-			if randf() > diagonal_probability:
-				# Try right diagonal
-				if x + 1 < grid.size() and y + 1 < grid[x + 1].size() and grid[x + 1][y + 1].type == Constants.CellType.EMPTY:
-					grid[x + 1][y + 1] = cell
-					grid[x][y] = create_empty_cell()
-					continue
-				
-				# Try left diagonal
-				if x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and grid[x - 1][y + 1].type == Constants.CellType.EMPTY:
-					grid[x - 1][y + 1] = cell
-					grid[x][y] = create_empty_cell()
-					continue
-			
-			# Apply dampening to velocity
-			cell.velocity *= cell.dampening
-			
-			# If velocity is very small, stop the motion completely
-			if cell.velocity.length_squared() < 0.01:
-				cell.velocity = Vector2.ZERO
+				Constants.MaterialType.LIQUID:
+					# Liquids are easily displaced by impacts
+					if impact_force > resistance_threshold * 0.5:
+						var cell_properties = cell.duplicate()
+						
+						# Apply velocity based on impact (liquids move more)
+						cell_properties.velocity = impact_dir * impact_force * 1.2
+						
+						# Always remove liquid with sufficient force
+						if impact_force > resistance_threshold * 0.8:
+							grid[x][y] = create_empty_cell()
+							
+							# Calculate new position based on impact direction
+							var strength_factor = min(5.0, impact_force * displacement_factor * 1.5)
+							var new_x = int(x + impact_dir.x * strength_factor)
+							var new_y = int(y + impact_dir.y * strength_factor)
+							
+							# Try to place the liquid in the impact direction
+							if new_x >= 0 and new_x < Constants.GRID_WIDTH and new_y >= 0 and new_y < Constants.GRID_HEIGHT and new_x < grid.size() and new_y < grid[new_x].size():
+								if grid[new_x][new_y].type == Constants.CellType.EMPTY:
+									grid[new_x][new_y] = cell_properties
+						else:
+							# Just apply velocity without moving the liquid
+							grid[x][y].velocity = impact_dir * impact_force * 1.0
 
 # Helper function to efficiently count dirt neighbors
 func count_dirt_neighbors(x, y):
@@ -519,49 +656,6 @@ func count_dirt_neighbors(x, y):
 						return count
 	
 	return count
-
-func update_water_physics():
-	# Update from bottom to top, right to left
-	for y in range(Constants.GRID_HEIGHT - 2, 0, -1):
-		for x in range(Constants.GRID_WIDTH - 1, 0, -1):
-			# First check if the current cell exists and is water
-			if x < grid.size() and y < grid[x].size() and grid[x][y].type == Constants.CellType.WATER:
-				var cell = grid[x][y]
-				
-				# Apply gravity to velocity based on cell mass (water is affected less by gravity)
-				cell.velocity.y += Constants.GRAVITY * 0.005 * cell.mass
-				
-				# Check if space below is empty and within bounds
-				if y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.EMPTY:
-					grid[x][y + 1] = cell
-					grid[x][y] = create_empty_cell()
-				
-				# Check if diagonal down-right is empty, using mass to affect probability
-				elif x + 1 < grid.size() and y + 1 < grid[x + 1].size() and randf() > (0.1 + cell.mass * 0.05) and grid[x + 1][y + 1].type == Constants.CellType.EMPTY:
-					grid[x + 1][y + 1] = cell
-					grid[x][y] = create_empty_cell()
-				
-				# Check if diagonal down-left is empty, using mass to affect probability
-				elif x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and randf() > (0.1 + cell.mass * 0.05) and grid[x - 1][y + 1].type == Constants.CellType.EMPTY:
-					grid[x - 1][y + 1] = cell
-					grid[x][y] = create_empty_cell()
-				
-				# Check horizontal water flow right if there's water behind
-				elif x + 1 < grid.size() and randf() > (0.4 + cell.mass * 0.1) and grid[x + 1][y].type == Constants.CellType.EMPTY and \
-					 x - 1 >= 0 and x - 1 < grid.size() and grid[x - 1][y].type == Constants.CellType.WATER and \
-					 x - 2 >= 0 and x - 2 < grid.size() and grid[x - 2][y].type == Constants.CellType.WATER:
-					grid[x + 1][y] = cell
-					grid[x][y] = create_empty_cell()
-				
-				# Check horizontal water flow left if there's water behind
-				elif x - 1 >= 0 and x - 1 < grid.size() and randf() > (0.4 + cell.mass * 0.1) and grid[x - 1][y].type == Constants.CellType.EMPTY and \
-					 x + 1 < grid.size() and grid[x + 1][y].type == Constants.CellType.WATER and \
-					 x + 2 < grid.size() and grid[x + 2][y].type == Constants.CellType.WATER:
-					grid[x - 1][y] = cell
-					grid[x][y] = create_empty_cell()
-				
-				# Apply dampening to velocity (water has high dampening)
-				cell.velocity *= cell.dampening
 
 func set_cell(x, y, type):
 	if x >= 0 and x < Constants.GRID_WIDTH and y >= 0 and y < Constants.GRID_HEIGHT and x < grid.size() and y < grid[x].size():
@@ -612,48 +706,62 @@ func _draw():
 					Vector2(Constants.GRID_SIZE, Constants.GRID_SIZE)
 				)
 				
-				match cell.type:
-					Constants.CellType.EMPTY:
-						# Sky color
-						draw_rect(rect, Constants.CELL_DEFAULTS[Constants.CellType.EMPTY].base_color, true)
+				# Get the base color from cell properties or defaults
+				var base_color = Color(0.5, 0.5, 0.5)  # Default gray if no color defined
+				
+				if cell.has("base_color"):
+					base_color = cell.base_color
+				elif Constants.CELL_DEFAULTS.has(cell.type) and Constants.CELL_DEFAULTS[cell.type].has("base_color"):
+					base_color = Constants.CELL_DEFAULTS[cell.type].base_color
+				
+				# Apply color variations based on material type
+				if cell.type != Constants.CellType.EMPTY and cell.type != Constants.CellType.HOLE and cell.type != Constants.CellType.BALL:
+					# Get material type
+					var material_type = Constants.MaterialType.NONE
+					if cell.has("material_type"):
+						material_type = cell.material_type
+					elif Constants.MATERIAL_CATEGORIES.has(cell.type):
+						material_type = Constants.MATERIAL_CATEGORIES[cell.type]
 					
-					Constants.CellType.SAND:
-						# Apply color variation
-						var sand_color = Constants.SAND_COLOR
-						sand_color.r += cell.color_variation.x
-						sand_color.g += cell.color_variation.y
-						draw_rect(rect, sand_color, true)
-					
-					Constants.CellType.HOLE:
-						# Draw hole with a thicker border to make it more visible
-						draw_rect(rect, Constants.HOLE_COLOR, true)
-					
-					Constants.CellType.WATER:
-						# Draw water with color variation
-						var water_color = Constants.WATER_COLOR
-						water_color.b += cell.color_variation.x
-						water_color.g += cell.color_variation.y
-						draw_rect(rect, water_color, true)
-					
-					Constants.CellType.STONE:
-						# Draw stone with color variation and texture
-						var stone_color = Constants.STONE_COLOR
-						stone_color.r += cell.color_variation.x
-						stone_color.g += cell.color_variation.y
-						stone_color.b += (cell.color_variation.x + cell.color_variation.y) / 2
-						draw_rect(rect, stone_color, true)
+					# Apply color variation based on material type
+					if cell.color_variation is Vector2:
+						# Use Vector2 color variation
+						match material_type:
+							Constants.MaterialType.LIQUID:
+								# Liquids get more blue/green variation
+								base_color.b += cell.color_variation.x
+								base_color.g += cell.color_variation.y
 							
-					Constants.CellType.DIRT:
-						# Get the base dirt color with variation
-						var dirt_color = Constants.DIRT_COLOR
-						dirt_color.r += cell.color_variation.x
-						dirt_color.g += cell.color_variation.y
-						
-						# Modify the color if this is a top dirt cell (for grass)
-						if cell.is_top_dirt:
-							# Make it more green and less red for grass effect
-							dirt_color.r *= 0.7  # Reduce red
-							dirt_color.g *= 1.5  # Increase green
-						
-						# Draw the dirt cell with appropriate color
-						draw_rect(rect, dirt_color, true)
+							Constants.MaterialType.GRANULAR:
+								# Granular materials get more red/yellow variation
+								base_color.r += cell.color_variation.x
+								base_color.g += cell.color_variation.y
+								
+								# Special case for dirt with grass
+								if cell.type == Constants.CellType.DIRT and cell.is_top_dirt:
+									# Make it more green and less red for grass effect
+									base_color.r *= 0.7  # Reduce red
+									base_color.g *= 1.5  # Increase green
+							
+							Constants.MaterialType.SOLID:
+								# Solids get more uniform gray variation
+								base_color.r += cell.color_variation.x
+								base_color.g += cell.color_variation.y
+								base_color.b += (cell.color_variation.x + cell.color_variation.y) / 2
+					elif cell.color_variation is float:
+						# Use float color variation (for fire and other special types)
+						match material_type:
+							Constants.MaterialType.LIQUID:
+								# For fire and other special liquids
+								base_color.r += cell.color_variation * 0.1
+								base_color.g += cell.color_variation * 0.05
+								base_color.b += cell.color_variation * 0.02
+							_:
+								# Default variation for all other types
+								var variation = cell.color_variation
+								base_color.r += variation
+								base_color.g += variation
+								base_color.b += variation
+				
+				# Draw the cell with its final color
+				draw_rect(rect, base_color, true)
