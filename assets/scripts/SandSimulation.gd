@@ -151,6 +151,22 @@ func ensure_grid_dimensions():
 	for x in range(grid.size()):
 		while grid[x].size() < Constants.GRID_HEIGHT:
 			grid[x].append(create_empty_cell())
+	
+	# Ensure all cells are properly initialized
+	for x in range(Constants.GRID_WIDTH):
+		for y in range(Constants.GRID_HEIGHT):
+			if x >= grid.size() or y >= grid[x].size() or grid[x][y] == null:
+				if x >= grid.size():
+					while grid.size() <= x:
+						var new_column = []
+						for i in range(Constants.GRID_HEIGHT):
+							new_column.append(create_empty_cell())
+						grid.append(new_column)
+				elif y >= grid[x].size():
+					while grid[x].size() <= y:
+						grid[x].append(create_empty_cell())
+				else:
+					grid[x][y] = create_empty_cell()
 
 func load_level(level_path):
 	current_level_path = level_path
@@ -205,10 +221,22 @@ func _on_simulation_update():
 
 # Universal physics update function that handles all material types
 func update_physics():
-	# Process all cells in the grid
-	for x in range(grid.size()):
-		for y in range(grid[x].size()):
+	# Make sure the grid is properly initialized before processing
+	ensure_grid_dimensions()
+	
+	# Process cells from bottom to top and right to left for more natural flow
+	# This helps prevent the "gap" issue by ensuring lower cells are processed first
+	for y in range(Constants.GRID_HEIGHT - 1, -1, -1):
+		for x in range(Constants.GRID_WIDTH - 1, -1, -1):
+			# Skip if out of bounds
+			if x >= grid.size() or y >= grid[x].size():
+				continue
+				
 			var cell = grid[x][y]
+			if cell == null:
+				grid[x][y] = create_empty_cell()
+				continue
+				
 			var cell_type = cell.type
 			
 			# Skip empty cells and special types
@@ -244,19 +272,25 @@ func update_liquid_cell(x, y, cell):
 	
 	# Check if space below is empty and within bounds
 	if y + 1 < grid[x].size() and grid[x][y + 1].type == Constants.CellType.EMPTY:
-		grid[x][y + 1] = cell
+		# Create a copy of the cell to avoid reference issues
+		var cell_copy = cell.duplicate()
+		grid[x][y + 1] = cell_copy
 		grid[x][y] = create_empty_cell()
 		return
 	
 	# Check if diagonal down-right is empty, using flow_rate to affect probability
 	if x + 1 < grid.size() and y + 1 < grid[x + 1].size() and randf() > (0.1 + (1.0 - cell.flow_rate) * 0.2) and grid[x + 1][y + 1].type == Constants.CellType.EMPTY:
-		grid[x + 1][y + 1] = cell
+		# Create a copy of the cell to avoid reference issues
+		var cell_copy = cell.duplicate()
+		grid[x + 1][y + 1] = cell_copy
 		grid[x][y] = create_empty_cell()
 		return
 	
 	# Check if diagonal down-left is empty, using flow_rate to affect probability
 	if x - 1 >= 0 and x - 1 < grid.size() and y + 1 < grid[x - 1].size() and randf() > (0.1 + (1.0 - cell.flow_rate) * 0.2) and grid[x - 1][y + 1].type == Constants.CellType.EMPTY:
-		grid[x - 1][y + 1] = cell
+		# Create a copy of the cell to avoid reference issues
+		var cell_copy = cell.duplicate()
+		grid[x - 1][y + 1] = cell_copy
 		grid[x][y] = create_empty_cell()
 		return
 	
@@ -267,7 +301,9 @@ func update_liquid_cell(x, y, cell):
 	if x + 1 < grid.size() and randf() > (1.0 - horizontal_flow_chance) and grid[x + 1][y].type == Constants.CellType.EMPTY and \
 		 x - 1 >= 0 and x - 1 < grid.size() and is_liquid(grid[x - 1][y]) and \
 		 x - 2 >= 0 and x - 2 < grid.size() and is_liquid(grid[x - 2][y]):
-		grid[x + 1][y] = cell
+		# Create a copy of the cell to avoid reference issues
+		var cell_copy = cell.duplicate()
+		grid[x + 1][y] = cell_copy
 		grid[x][y] = create_empty_cell()
 		return
 	
@@ -275,7 +311,9 @@ func update_liquid_cell(x, y, cell):
 	if x - 1 >= 0 and x - 1 < grid.size() and randf() > (1.0 - horizontal_flow_chance) and grid[x - 1][y].type == Constants.CellType.EMPTY and \
 		 x + 1 < grid.size() and is_liquid(grid[x + 1][y]) and \
 		 x + 2 < grid.size() and is_liquid(grid[x + 2][y]):
-		grid[x - 1][y] = cell
+		# Create a copy of the cell to avoid reference issues
+		var cell_copy = cell.duplicate()
+		grid[x - 1][y] = cell_copy
 		grid[x][y] = create_empty_cell()
 		return
 	
@@ -363,15 +401,25 @@ func update_granular_cell(x, y, cell):
 		
 		# Check if space below is empty
 		if below_type == Constants.CellType.EMPTY:
-			grid[x][y + 1] = cell
+			# Create a copy of the cell to avoid reference issues
+			var cell_copy = cell.duplicate()
+			grid[x][y + 1] = cell_copy
 			grid[x][y] = create_empty_cell()
 			return
 		
 		# Check if space below is liquid - granular materials sink in liquids
 		elif is_liquid(grid[x][y + 1]):
-			var liquid_cell = grid[x][y + 1]
-			grid[x][y] = liquid_cell  # Replace granular with liquid
-			grid[x][y + 1] = cell     # Granular sinks
+			# Create temporary copies
+			var temp_granular = cell.duplicate()
+			var temp_liquid = grid[x][y + 1].duplicate()
+			
+			# Set velocities - granular gets downward velocity, liquid gets upward
+			temp_granular.velocity.y += 0.1  # Add downward velocity to granular
+			temp_liquid.velocity.y -= 0.1    # Add upward velocity to liquid
+			
+			# Replace cells
+			grid[x][y] = temp_liquid      # Liquid moves up
+			grid[x][y + 1] = temp_granular  # Granular sinks down
 			return
 		
 		# If blocked below, try diagonal paths based on flow_rate
@@ -386,18 +434,26 @@ func update_granular_cell(x, y, cell):
 		if can_move_right and can_move_left:
 			# If both diagonals are available, randomly choose one
 			if randf() > 0.5:
-				grid[x + 1][y + 1] = cell
+				# Create a copy of the cell to avoid reference issues
+				var cell_copy = cell.duplicate()
+				grid[x + 1][y + 1] = cell_copy
 				grid[x][y] = create_empty_cell()
 			else:
-				grid[x - 1][y + 1] = cell
+				# Create a copy of the cell to avoid reference issues
+				var cell_copy = cell.duplicate()
+				grid[x - 1][y + 1] = cell_copy
 				grid[x][y] = create_empty_cell()
 			return
 		elif can_move_right and randf() < diagonal_chance:
-			grid[x + 1][y + 1] = cell
+			# Create a copy of the cell to avoid reference issues
+			var cell_copy = cell.duplicate()
+			grid[x + 1][y + 1] = cell_copy
 			grid[x][y] = create_empty_cell()
 			return
 		elif can_move_left and randf() < diagonal_chance:
-			grid[x - 1][y + 1] = cell
+			# Create a copy of the cell to avoid reference issues
+			var cell_copy = cell.duplicate()
+			grid[x - 1][y + 1] = cell_copy
 			grid[x][y] = create_empty_cell()
 			return
 		
@@ -413,12 +469,16 @@ func update_granular_cell(x, y, cell):
 			var has_left_neighbor = x - 1 >= 0 and x - 1 < grid.size() and y < grid[x - 1].size() and grid[x - 1][y].type == cell.type
 			
 			if has_right_neighbor and x + 2 < grid.size() and y + 1 < grid[x + 2].size() and grid[x + 2][y + 1].type == Constants.CellType.EMPTY:
-				grid[x + 2][y + 1] = cell
+				# Create a copy of the cell to avoid reference issues
+				var cell_copy = cell.duplicate()
+				grid[x + 2][y + 1] = cell_copy
 				grid[x][y] = create_empty_cell()
 				return
 			
 			if has_left_neighbor and x - 2 >= 0 and x - 2 < grid.size() and y + 1 < grid[x - 2].size() and grid[x - 2][y + 1].type == Constants.CellType.EMPTY:
-				grid[x - 2][y + 1] = cell
+				# Create a copy of the cell to avoid reference issues
+				var cell_copy = cell.duplicate()
+				grid[x - 2][y + 1] = cell_copy
 				grid[x][y] = create_empty_cell()
 				return
 	
