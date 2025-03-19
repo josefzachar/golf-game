@@ -26,12 +26,8 @@ func handle_stone_detection():
 		# Force the ball to rest directly on top of the stone
 		ball.ball_position.y = stone_y_pos - 1  # Position exactly on top of stone
 		
-		# For sticky ball, set to very low velocity instead of zero
-		# This allows shooting while still sticking to the surface
-		if ball.current_ball_type == Constants.BallType.STICKY:
-			ball.ball_velocity = Vector2(0, 0.01)  # Very tiny velocity to allow shooting
-		else:
-			ball.ball_velocity = Vector2.ZERO  # Complete stop - no velocity at all
+		# Always set to very low velocity instead of zero to allow shooting
+		ball.ball_velocity = Vector2(0, 0.01)  # Very tiny velocity to allow shooting
 		
 		# Place ball at this position and exit immediately
 		var x = int(ball.ball_position.x)
@@ -119,9 +115,10 @@ func handle_stone_surface(check_pos_below):
 	
 	# Different behavior based on ball type
 	if ball.current_ball_type == Constants.BallType.STICKY:
-		# Set velocity to very small value instead of zero to allow shooting
-		ball.ball_velocity.x = 0
-		ball.ball_velocity.y = 0.01  # Tiny value above zero
+		# For sticky ball, preserve horizontal velocity but set a minimum vertical velocity
+		# This allows the ball to be shot while still appearing to stick to the surface
+		if ball.ball_velocity.length() < 0.1:  # Only if not already moving significantly
+			ball.ball_velocity.y = 0.01  # Tiny value above zero to allow shooting
 	else:
 		# INCREASED FRICTION: Apply much stronger horizontal friction on stone
 		if abs(ball.ball_velocity.x) > 0.1:
@@ -155,9 +152,10 @@ func handle_dirt_surface(check_pos_below):
 	
 	# Different behavior based on ball type
 	if ball.current_ball_type == Constants.BallType.STICKY:
-		# Sticky ball - use very small velocity to allow shooting
-		ball.ball_velocity.x = 0
-		ball.ball_velocity.y = 0.01  # Tiny value above zero
+		# For sticky ball, preserve horizontal velocity but set a minimum vertical velocity
+		# This allows the ball to be shot while still appearing to stick to the surface
+		if ball.ball_velocity.length() < 0.1:  # Only if not already moving significantly
+			ball.ball_velocity.y = 0.01  # Tiny value above zero to allow shooting
 	else:
 		# Apply moderate friction for nice rolling behavior
 		if abs(ball.ball_velocity.x) > 0.1:

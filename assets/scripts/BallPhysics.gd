@@ -25,16 +25,19 @@ func update_physics():
 	if ball.main_node and ball.main_node.has_method("get") and ball.main_node.get("game_won"):
 		return
 		
-	# Clear current ball position
-	var x = int(ball.ball_position.x)
-	var y = int(ball.ball_position.y)
-	ball.sand_simulation.set_cell(x, y, Constants.CellType.EMPTY)
+	# Clear ALL ball cells from the grid to prevent leftovers
+	for x in range(Constants.GRID_WIDTH):
+		for y in range(Constants.GRID_HEIGHT):
+			if ball.sand_simulation.get_cell(x, y) == Constants.CellType.BALL:
+				ball.sand_simulation.set_cell(x, y, Constants.CellType.EMPTY)
 	
 	# EXTREMELY AGGRESSIVE STONE DETECTION - Delegate to surface physics
 	if surface_physics.handle_stone_detection():
 		return
 	
 	# Check if ball is in water - Delegate to material physics
+	var x = int(ball.ball_position.x)
+	var y = int(ball.ball_position.y)
 	var in_water = material_physics.handle_water_physics(x, y)
 	
 	# Check if ball is resting on a surface - Delegate to surface physics
@@ -48,7 +51,8 @@ func update_physics():
 		# Delegate to collision physics
 		collision_physics.calculate_new_position()
 	
-	# Place ball at new position
+	# Place ball at new position - only if within bounds
 	x = int(ball.ball_position.x)
 	y = int(ball.ball_position.y)
-	ball.sand_simulation.set_cell(x, y, Constants.CellType.BALL)
+	if x >= 0 and x < Constants.GRID_WIDTH and y >= 0 and y < Constants.GRID_HEIGHT:
+		ball.sand_simulation.set_cell(x, y, Constants.CellType.BALL)

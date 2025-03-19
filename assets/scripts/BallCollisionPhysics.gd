@@ -12,6 +12,9 @@ func _init(ball_reference):
 	material_physics = BallMaterialPhysics.new(ball)
 
 func calculate_new_position():
+	# For sticky ball in mid-air, ensure we're not applying any resistance
+	var is_sticky_in_air = ball.current_ball_type == Constants.BallType.STICKY
+	
 	var new_ball_position = ball.ball_position + ball.ball_velocity * 0.1
 	
 	# Handle stone collisions
@@ -137,10 +140,18 @@ func handle_stone_bounce(stone_normal, stone_pos, new_ball_position):
 	# Update the ball position here and exit
 	ball.ball_position = new_ball_position
 	
-	# Place ball at new position
+	# Place ball at new position - only if within bounds
 	var x = int(ball.ball_position.x)
 	var y = int(ball.ball_position.y)
-	ball.sand_simulation.set_cell(x, y, Constants.CellType.BALL)
+	if x >= 0 and x < Constants.GRID_WIDTH and y >= 0 and y < Constants.GRID_HEIGHT:
+		# First clear any existing ball cells to prevent duplicates
+		for cx in range(Constants.GRID_WIDTH):
+			for cy in range(Constants.GRID_HEIGHT):
+				if ball.sand_simulation.get_cell(cx, cy) == Constants.CellType.BALL:
+					ball.sand_simulation.set_cell(cx, cy, Constants.CellType.EMPTY)
+		
+		# Now set the new ball position
+		ball.sand_simulation.set_cell(x, y, Constants.CellType.BALL)
 
 func handle_boundary_collisions(new_ball_position):
 	var bounced = false
@@ -170,7 +181,11 @@ func handle_boundary_collisions(new_ball_position):
 	if new_ball_position.y <= 0:
 		new_ball_position.y = 0
 		if ball.current_ball_type == Constants.BallType.STICKY:
-			ball.ball_velocity = Vector2.ZERO  # Sticky ball sticks to ceiling
+			# Sticky ball sticks to ceiling for 3 seconds
+			if not ball.has_meta("ceiling_stick_time"):
+				ball.set_meta("ceiling_stick_time", 3.0)  # Set 3 second timer
+			# Always stop movement when touching ceiling
+			ball.ball_velocity = Vector2.ZERO
 		else:
 			ball.ball_velocity.y = -ball.ball_velocity.y * bounce_factor
 		bounced = true
@@ -224,8 +239,16 @@ func create_impact_crater(position):
 			if cell_type == Constants.CellType.SAND:
 				ball.sand_simulation.create_impact_crater(check_pos, ball.ball_velocity.length() * 0.2 * size_multiplier)
 				return
-			elif cell_type == Constants.CellType.DIRT and ball.ball_velocity.length() > 5.0 * threshold_multiplier:
-				ball.sand_simulation.create_impact_crater(check_pos, ball.ball_velocity.length() * 0.02 * size_multiplier)
+			elif cell_type == Constants.CellType.DIRT:
+				# Make dirt much more resistant to crater formation for standard and sticky balls
+				if ball.current_ball_type == Constants.BallType.HEAVY:
+					# Heavy ball can still create craters in dirt, but needs significant force
+					if ball.ball_velocity.length() > 5.0 * threshold_multiplier:
+						ball.sand_simulation.create_impact_crater(check_pos, ball.ball_velocity.length() * 0.02 * size_multiplier)
+				else:
+					# Standard and sticky balls need MUCH more force to create craters in dirt
+					if ball.ball_velocity.length() > 12.0:  # Very high threshold
+						ball.sand_simulation.create_impact_crater(check_pos, ball.ball_velocity.length() * 0.01 * size_multiplier)  # Smaller craters
 				return
 
 func handle_material_collisions(new_ball_position):

@@ -89,6 +89,17 @@ func _process(delta):
 	# Update ball rotation based on horizontal velocity
 	update_ball_rotation(delta)
 	
+	# Handle ceiling stick timer for sticky ball
+	if current_ball_type == Constants.BallType.STICKY and has_meta("ceiling_stick_time"):
+		var time_left = get_meta("ceiling_stick_time") - delta
+		if time_left <= 0:
+			# Time's up, remove the meta and apply gravity
+			remove_meta("ceiling_stick_time")
+			ball_velocity.y = 0.1  # Small initial velocity to start falling
+		else:
+			# Update the timer
+			set_meta("ceiling_stick_time", time_left)
+	
 	# Request redraw for visual updates
 	queue_redraw()
 
@@ -147,16 +158,19 @@ func update_ball_in_grid():
 	if not sand_simulation:
 		return
 		
-	# Clear any existing ball from the grid
+	# Clear any existing ball from the grid - more thorough approach
 	for x in range(Constants.GRID_WIDTH):
 		for y in range(Constants.GRID_HEIGHT):
 			if sand_simulation.get_cell(x, y) == Constants.CellType.BALL:
 				sand_simulation.set_cell(x, y, Constants.CellType.EMPTY)
 	
-	# Set the ball's position in the grid (since physics still uses a single cell)
+	# Set the ball's position in the grid (only a single cell)
 	var x = int(ball_position.x)
 	var y = int(ball_position.y)
-	sand_simulation.set_cell(x, y, Constants.CellType.BALL)
+	
+	# Only set the ball cell if it's within bounds
+	if x >= 0 and x < Constants.GRID_WIDTH and y >= 0 and y < Constants.GRID_HEIGHT:
+		sand_simulation.set_cell(x, y, Constants.CellType.BALL)
 
 # Function to switch ball type
 func switch_ball_type(new_type):
@@ -169,6 +183,10 @@ func switch_ball_type(new_type):
 	# Set the new ball type and update properties
 	current_ball_type = new_type
 	update_ball_properties()
+	
+	# Remove any ceiling stick timer if changing ball type
+	if has_meta("ceiling_stick_time"):
+		remove_meta("ceiling_stick_time")
 	
 	# Special behavior for teleport ball - swap with hole when switched to
 	if new_type == Constants.BallType.TELEPORT:
@@ -190,6 +208,10 @@ func can_shoot():
 		
 	# Special case: if at bottom edge, allow shooting regardless of velocity
 	if ball_position.y >= Constants.GRID_HEIGHT - 1.5:
+		return true
+	
+	# For sticky ball, always allow shooting
+	if current_ball_type == Constants.BallType.STICKY:
 		return true
 		
 	# Use a higher threshold matching REST_THRESHOLD from Constants.gd

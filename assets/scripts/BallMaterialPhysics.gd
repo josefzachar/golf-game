@@ -21,13 +21,14 @@ func handle_liquid_physics(x, y):
 			if ball.current_ball_type == Constants.BallType.STICKY:
 				# Find the highest liquid cell in this column to float on
 				for check_y in range(y, 0, -1):
-					var check_cell = ball.sand_simulation.get_cell(check_y, x)
-					var check_props = ball.sand_simulation.get_cell_properties(check_y, x)
+					var check_cell = ball.sand_simulation.get_cell(x, check_y)
+					var check_props = ball.sand_simulation.get_cell_properties(x, check_y)
 					if not check_props or check_props.material_type != Constants.MaterialType.LIQUID:
 						# Position the ball just on top of the liquid
 						ball.ball_position.y = check_y + 1
-						ball.ball_velocity.y = 0  # No vertical movement
-						ball.ball_velocity.x *= (1.0 - cell_properties.friction * 0.1)  # Friction based on liquid properties
+						# Set to very small velocity to allow shooting from water
+						ball.ball_velocity.y = 0.01  # Tiny vertical velocity to allow shooting
+						ball.ball_velocity.x *= (1.0 - cell_properties.friction * 0.1)  # Minimal friction
 						break
 			else:
 				# Apply resistance based on liquid properties
@@ -71,6 +72,12 @@ func apply_gravity(on_surface, in_liquid):
 		
 		# Get ball mass from properties
 		var ball_mass = ball.ball_properties.get("mass", Constants.BALL_MASS)
+		
+		# For sticky ball in mid-air (not on surface and not in liquid), apply normal gravity
+		if ball.current_ball_type == Constants.BallType.STICKY and !on_surface and !in_liquid:
+			# Make sure we're not slowing down in mid-air
+			gravity_modifier = 1.0  # Full gravity for sticky ball in mid-air
+		
 		ball.ball_velocity.y += Constants.GRAVITY * 0.01 * ball_mass * gravity_modifier
 
 # Apply resistance from any material based on its properties
@@ -139,14 +146,26 @@ func handle_granular_collision(impact_force, cell_properties, cell_pos):
 	# Store if this is a grass cell (top dirt)
 	var is_grass = cell_properties.is_top_dirt if cell_properties.has("is_top_dirt") else false
 	
+	# Check if this is dirt (more rigid) or sand (softer)
+	var is_dirt = false
+	var cell_type = ball.sand_simulation.get_cell(cell_pos.x, cell_pos.y)
+	if cell_type == Constants.CellType.DIRT:
+		is_dirt = true
+	
 	# Calculate penetration threshold based on material strength
 	var penetration_threshold = cell_properties.strength * 2.0
+	
+	# Make dirt much more rigid for standard and sticky balls
+	if is_dirt:
+		if ball.current_ball_type == Constants.BallType.STANDARD or ball.current_ball_type == Constants.BallType.STICKY:
+			penetration_threshold *= 5.0  # Much higher threshold for dirt
 	
 	# Heavy ball has increased impact force
 	var penetration_factor = 1.0
 	if ball.current_ball_type == Constants.BallType.HEAVY:
 		penetration_factor = ball.ball_properties.get("penetration_factor", 1.0)
-		penetration_threshold *= 0.5  # Easier for heavy ball to penetrate
+		if not is_dirt:
+			penetration_threshold *= 0.5  # Easier for heavy ball to penetrate (but only for sand, not dirt)
 	
 	# If moving fast enough or material is weak enough, penetrate the material
 	if impact_force * penetration_factor > penetration_threshold:
@@ -271,7 +290,23 @@ func handle_liquid_collision(impact_force, cell_properties, cell_pos):
 func apply_granular_resistance(cell_properties):
 	var resistance = cell_properties.density * cell_properties.friction
 	
-	if ball.current_ball_type == Constants.BallType.HEAVY:
+	# For sticky ball, don't apply any resistance in mid-air
+	if ball.current_ball_type == Constants.BallType.STICKY:
+		# Only apply resistance if actually touching the material
+		var x = int(ball.ball_position.x)
+		var y = int(ball.ball_position.y)
+		var cell_below = Vector2(x, y + 1)
+		var is_on_material = false
+		
+		if cell_below.y < Constants.GRID_HEIGHT:
+			var cell_type = ball.sand_simulation.get_cell(cell_below.x, cell_below.y)
+			if cell_type == Constants.CellType.SAND or cell_type == Constants.CellType.DIRT:
+				is_on_material = true
+		
+		# Only apply resistance if on material
+		if is_on_material:
+			ball.ball_velocity /= (1.0 + (resistance / ball.ball_properties.get("mass", Constants.BALL_MASS)) * 0.6)
+	elif ball.current_ball_type == Constants.BallType.HEAVY:
 		# Heavy ball experiences less resistance
 		ball.ball_velocity /= (1.0 + (resistance / ball.ball_properties.get("mass", Constants.BALL_MASS)) * 0.3)
 	else:
