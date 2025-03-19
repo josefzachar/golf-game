@@ -66,34 +66,39 @@ func _process(delta):
 	queue_redraw()
 
 func _draw():
+	# Get screen size
+	var viewport_size = get_viewport_rect().size
+	var right_edge = viewport_size.x - graph_width - 30  # 30 pixels from right edge
+	var bottom_edge = viewport_size.y - graph_height - 80  # 80 pixels from bottom edge
+	
 	# Draw background
 	var bg_color = Color(0, 0, 0, 0.5)
-	draw_rect(Rect2(10, 10, graph_width + 20, graph_height + 60), bg_color, true)
+	draw_rect(Rect2(right_edge, bottom_edge, graph_width + 20, graph_height + 60), bg_color, true)
 	
 	# Draw FPS text
 	var text_color = Color(1, 1, 1)
 	var font_size = 12
 	
 	# Use draw_string_outline for Godot 4.x
-	draw_string(font, Vector2(15, 25), "FPS: " + str(current_fps), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
-	draw_string(font, Vector2(15, 40), "Min: " + str(min_fps) + " | Max: " + str(max_fps) + " | Avg: " + str(int(avg_fps)), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
-	draw_string(font, Vector2(15, 55), "Active Cells: " + str(active_cell_count), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
+	draw_string(font, Vector2(right_edge + 5, bottom_edge + 15), "FPS: " + str(current_fps), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
+	draw_string(font, Vector2(right_edge + 5, bottom_edge + 30), "Min: " + str(min_fps) + " | Max: " + str(max_fps) + " | Avg: " + str(int(avg_fps)), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
+	draw_string(font, Vector2(right_edge + 5, bottom_edge + 45), "Active Cells: " + str(active_cell_count), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
 	
 	# Draw graph
 	var graph_bg_color = Color(0.1, 0.1, 0.1, 0.5)
-	draw_rect(Rect2(20, 65, graph_width, graph_height), graph_bg_color, true)
+	draw_rect(Rect2(right_edge + 10, bottom_edge + 55, graph_width, graph_height), graph_bg_color, true)
 	
 	# Draw target FPS line
-	var target_y = 65 + graph_height - (target_fps * graph_height / 100)
+	var target_y = bottom_edge + 55 + graph_height - (target_fps * graph_height / 100)
 	var target_color = Color(0, 1, 0, 0.5)
-	draw_line(Vector2(20, target_y), Vector2(20 + graph_width, target_y), target_color, 1)
+	draw_line(Vector2(right_edge + 10, target_y), Vector2(right_edge + 10 + graph_width, target_y), target_color, 1)
 	
 	# Draw FPS graph
 	for i in range(1, graph_data.size()):
-		var x1 = 20 + i - 1
-		var y1 = 65 + graph_height - (graph_data[i-1] * graph_height / 100)
-		var x2 = 20 + i
-		var y2 = 65 + graph_height - (graph_data[i] * graph_height / 100)
+		var x1 = right_edge + 10 + i - 1
+		var y1 = bottom_edge + 55 + graph_height - (graph_data[i-1] * graph_height / 100)
+		var x2 = right_edge + 10 + i
+		var y2 = bottom_edge + 55 + graph_height - (graph_data[i] * graph_height / 100)
 		
 		# Color based on FPS (red for low, green for high)
 		var graph_color
