@@ -140,18 +140,8 @@ func handle_stone_bounce(stone_normal, stone_pos, new_ball_position):
 	# Update the ball position here and exit
 	ball.ball_position = new_ball_position
 	
-	# Place ball at new position - only if within bounds
-	var x = int(ball.ball_position.x)
-	var y = int(ball.ball_position.y)
-	if x >= 0 and x < Constants.GRID_WIDTH and y >= 0 and y < Constants.GRID_HEIGHT:
-		# First clear any existing ball cells to prevent duplicates
-		for cx in range(Constants.GRID_WIDTH):
-			for cy in range(Constants.GRID_HEIGHT):
-				if ball.sand_simulation.get_cell(cx, cy) == Constants.CellType.BALL:
-					ball.sand_simulation.set_cell(cx, cy, Constants.CellType.EMPTY)
-		
-		# Now set the new ball position
-		ball.sand_simulation.set_cell(x, y, Constants.CellType.BALL)
+	# Update the ball's position in the grid using the optimized method
+	ball.update_ball_in_grid()
 
 func handle_boundary_collisions(new_ball_position):
 	var bounced = false
@@ -434,11 +424,8 @@ func handle_solid_direction_collision(check_pos, dir, dir_bounce_factor, cell_pr
 			if dir.y < 0:
 				ball.ball_velocity.y = -ball.ball_velocity.y * dir_bounce_factor * bounce_multiplier
 	
-	# Update position
-	# Place ball at new position
-	var x = int(ball.ball_position.x)
-	var y = int(ball.ball_position.y)
-	ball.sand_simulation.set_cell(x, y, Constants.CellType.BALL)
+	# Update ball position in grid
+	ball.update_ball_in_grid()
 
 # Universal handler for granular materials (sand, dirt, etc.)
 func handle_granular_direction_collision(check_pos, dir, dir_bounce_factor, cell_properties, create_crater):

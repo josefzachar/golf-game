@@ -7,6 +7,7 @@ var default_position = Vector2(50, 80)  # Store the default starting position
 var ball_velocity = Vector2.ZERO
 var sand_simulation = null
 var main_node = null
+var current_grid_pos = Vector2(-1, -1)  # Track current grid position for efficient updates
 
 # References to component scripts
 var physics_handler = null
@@ -154,15 +155,14 @@ func set_start_position(position):
 	update_ball_in_grid()
 	print("Ball starting position set to: ", position)
 
+# Optimized ball position tracking
 func update_ball_in_grid():
 	if not sand_simulation:
 		return
 		
-	# Clear any existing ball from the grid - more thorough approach
-	for x in range(Constants.GRID_WIDTH):
-		for y in range(Constants.GRID_HEIGHT):
-			if sand_simulation.get_cell(x, y) == Constants.CellType.BALL:
-				sand_simulation.set_cell(x, y, Constants.CellType.EMPTY)
+	# Clear previous ball position if valid
+	if current_grid_pos.x >= 0 and current_grid_pos.y >= 0 and current_grid_pos.x < Constants.GRID_WIDTH and current_grid_pos.y < Constants.GRID_HEIGHT:
+		sand_simulation.set_cell(current_grid_pos.x, current_grid_pos.y, Constants.CellType.EMPTY)
 	
 	# Set the ball's position in the grid (only a single cell)
 	var x = int(ball_position.x)
@@ -171,6 +171,9 @@ func update_ball_in_grid():
 	# Only set the ball cell if it's within bounds
 	if x >= 0 and x < Constants.GRID_WIDTH and y >= 0 and y < Constants.GRID_HEIGHT:
 		sand_simulation.set_cell(x, y, Constants.CellType.BALL)
+		current_grid_pos = Vector2(x, y)
+	else:
+		current_grid_pos = Vector2(-1, -1)
 
 # Function to switch ball type
 func switch_ball_type(new_type):

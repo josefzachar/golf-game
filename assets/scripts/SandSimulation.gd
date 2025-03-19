@@ -11,7 +11,7 @@ signal grid_updated(grid)
 func _ready():
 	# Set up the timer for physics simulation
 	var timer = Timer.new()
-	timer.wait_time = 0.02  # 20 updates per second
+	timer.wait_time = 0.05  # 20 updates per second
 	timer.autostart = true
 	timer.timeout.connect(_on_simulation_update)  # Godot 4.x signal syntax
 	add_child(timer)
@@ -205,13 +205,9 @@ func _on_simulation_update():
 
 # Universal physics update function that handles all material types
 func update_physics():
-	# Process cells from bottom to top, right to left
-	for y in range(Constants.GRID_HEIGHT - 2, 0, -1):
-		for x in range(Constants.GRID_WIDTH - 1, 0, -1):
-			# Skip out-of-bounds cells
-			if x >= grid.size() or y >= grid[x].size():
-				continue
-				
+	# Process all cells in the grid
+	for x in range(grid.size()):
+		for y in range(grid[x].size()):
 			var cell = grid[x][y]
 			var cell_type = cell.type
 			
@@ -443,14 +439,19 @@ func is_liquid(cell):
 
 # Find the top 1-3 cells of dirt for grass rendering (only on exposed dirt)
 func update_top_dirt_cells():
-	# Reset all dirt cells
+	# Process all columns
 	for x in range(Constants.GRID_WIDTH):
+		if x >= grid.size():
+			continue
+			
+		# Reset dirt cells in this column
 		for y in range(Constants.GRID_HEIGHT):
-			if x < grid.size() and y < grid[x].size() and grid[x][y].type == Constants.CellType.DIRT:
+			if y >= grid[x].size():
+				continue
+				
+			if grid[x][y].type == Constants.CellType.DIRT:
 				grid[x][y].is_top_dirt = false
-	
-	# Find the top exposed dirt cells in each column
-	for x in range(Constants.GRID_WIDTH):
+		
 		# Use the column position for consistent randomization
 		var column_seed = x * 1731 + 947
 		var rand_state = RandomNumberGenerator.new()
@@ -464,28 +465,30 @@ func update_top_dirt_cells():
 		
 		# Scan from top to bottom
 		for y in range(Constants.GRID_HEIGHT):
-			if x < grid.size() and y < grid[x].size():
-				# Current cell is dirt
-				if grid[x][y].type == Constants.CellType.DIRT:
-					# First dirt cell we've found in this column
-					if not found_exposed_dirt:
-						# Check if it's exposed to air (cell above is empty)
-						var is_exposed = false
-						if y > 0 and grid[x][y-1].type == Constants.CellType.EMPTY:
-							is_exposed = true
-						
-						# Only start adding grass if this dirt is exposed
-						if is_exposed:
-							found_exposed_dirt = true
-							grid[x][y].is_top_dirt = true
-							grass_cell_count = 1
-					# Subsequent dirt cells after the first exposed one
-					elif found_exposed_dirt and grass_cell_count < max_grass_cells:
+			if y >= grid[x].size():
+				continue
+				
+			# Current cell is dirt
+			if grid[x][y].type == Constants.CellType.DIRT:
+				# First dirt cell we've found in this column
+				if not found_exposed_dirt:
+					# Check if it's exposed to air (cell above is empty)
+					var is_exposed = false
+					if y > 0 and grid[x][y-1].type == Constants.CellType.EMPTY:
+						is_exposed = true
+					
+					# Only start adding grass if this dirt is exposed
+					if is_exposed:
+						found_exposed_dirt = true
 						grid[x][y].is_top_dirt = true
-						grass_cell_count += 1
-				# If we hit any non-dirt cell after finding exposed dirt, we're done with this column
-				elif found_exposed_dirt:
-					break
+						grass_cell_count = 1
+				# Subsequent dirt cells after the first exposed one
+				elif found_exposed_dirt and grass_cell_count < max_grass_cells:
+					grid[x][y].is_top_dirt = true
+					grass_cell_count += 1
+			# If we hit any non-dirt cell after finding exposed dirt, we're done with this column
+			elif found_exposed_dirt:
+				break
 
 func create_impact_crater(position, radius):
 	# Track affected cells to avoid redundant processing
@@ -585,6 +588,7 @@ func create_impact_crater(position, radius):
 							if new_x >= 0 and new_x < Constants.GRID_WIDTH and new_y >= 0 and new_y < Constants.GRID_HEIGHT and new_x < grid.size() and new_y < grid[new_x].size():
 								if grid[new_x][new_y].type == Constants.CellType.EMPTY:
 									grid[new_x][new_y] = cell_properties
+									
 									# Preserve grass state if it was dirt and had grass
 									if is_grass and cell_type == Constants.CellType.DIRT:
 										grid[new_x][new_y].is_top_dirt = true
@@ -696,11 +700,20 @@ func get_hole_position():
 	return hole_position
 
 func _draw():
-	# Draw the grid cells
+	# Draw blue sky background
+	var sky_color = Color(0.4, 0.6, 0.9)  # Light blue for sky
+	draw_rect(Rect2(0, 0, Constants.GRID_WIDTH * Constants.GRID_SIZE, Constants.GRID_HEIGHT * Constants.GRID_SIZE), sky_color, true)
+	
+	# Draw the grid cells - only draw non-empty cells for efficiency
 	for x in range(Constants.GRID_WIDTH):
 		for y in range(Constants.GRID_HEIGHT):
 			if x < grid.size() and y < grid[x].size():  # Add bounds check
 				var cell = grid[x][y]
+				
+				# Skip empty cells - they're represented by the sky background
+				if cell.type == Constants.CellType.EMPTY:
+					continue
+				
 				var rect = Rect2(
 					Vector2(x * Constants.GRID_SIZE, y * Constants.GRID_SIZE),
 					Vector2(Constants.GRID_SIZE, Constants.GRID_SIZE)

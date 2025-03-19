@@ -29,10 +29,8 @@ func handle_stone_detection():
 		# Always set to very low velocity instead of zero to allow shooting
 		ball.ball_velocity = Vector2(0, 0.01)  # Very tiny velocity to allow shooting
 		
-		# Place ball at this position and exit immediately
-		var x = int(ball.ball_position.x)
-		var y = int(ball.ball_position.y)
-		ball.sand_simulation.set_cell(x, y, Constants.CellType.BALL)
+		# Update ball position in grid and exit immediately
+		ball.update_ball_in_grid()
 		return true  # Exit physics update - no more calculations needed
 	
 	# DIRT DETECTION - similar to stone but allowing for rolling
@@ -70,10 +68,8 @@ func handle_dirt_detection():
 			if ball.ball_velocity.length() < 0.1:
 				ball.ball_velocity = Vector2.ZERO
 				
-		# Place ball at this position and continue with physics
-		var x = int(ball.ball_position.x)
-		var y = int(ball.ball_position.y)
-		ball.sand_simulation.set_cell(x, y, Constants.CellType.BALL)
+		# Update ball position in grid and continue with physics
+		ball.update_ball_in_grid()
 		# We don't return here, allowing the physics to continue
 	
 	return false  # Continue with normal physics
@@ -137,10 +133,8 @@ func handle_stone_surface(check_pos_below):
 			if ball.ball_velocity.length() < 0.2:
 				ball.ball_velocity = Vector2.ZERO
 				
-				# Place ball at position and exit physics update
-				var x = int(ball.ball_position.x)
-				var y = int(ball.ball_position.y)
-				ball.sand_simulation.set_cell(x, y, Constants.CellType.BALL)
+				# Update ball position in grid and exit physics update
+				ball.update_ball_in_grid()
 				return true  # Exit physics update since we're resting on stone
 				
 	return false
